@@ -1,0 +1,6 @@
+config GOLDFISH_AUDIO
+	tristate "Goldfish AVD Audio Device"
+	depends on GOLDFISH && HAS_IOMEM
+	---help---
+	  Emulated audio channel for the Goldfish Android Virtual Device
+
