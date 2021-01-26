@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Power supply driver for the goldfish emulator
  *
@@ -5,15 +6,6 @@
  * Copyright (C) 2012 Intel, Inc.
  * Copyright (C) 2013 Intel, Inc.
  * Author: Mike Lockwood <lockwood@android.com>
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/module.h>
@@ -25,9 +17,6 @@
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/acpi.h>
-
-#define POWER_SUPPLY_CURRENT_UA (900000) /* in uAmp */
-#define POWER_SUPPLY_CHARGE_FULL_UAH (300000) /* in uAmp*H */
 
 struct goldfish_battery_data {
 	void __iomem *reg_base;
@@ -43,30 +32,30 @@ struct goldfish_battery_data {
 #define GOLDFISH_BATTERY_WRITE(data, addr, x) \
 	(writel(x, data->reg_base + addr))
 
-/*
- * Temporary variable used between goldfish_battery_probe() and
- * goldfish_battery_open().
- */
-static struct goldfish_battery_data *battery_data;
-
 enum {
 	/* status register */
-	BATTERY_INT_STATUS	    = 0x00,
+	BATTERY_INT_STATUS	= 0x00,
 	/* set this to enable IRQ */
-	BATTERY_INT_ENABLE	    = 0x04,
-	BATTERY_AC_ONLINE       = 0x08,
-	BATTERY_STATUS          = 0x0C,
-	BATTERY_HEALTH          = 0x10,
-	BATTERY_PRESENT         = 0x14,
-	BATTERY_CAPACITY        = 0x18,
-	BATTERY_VOLTAGE         = 0x1C,
-	BATTERY_TEMP            = 0x20,
-	BATTERY_CHARGE_COUNTER  = 0x24,
-	BATTERY_VOLTAGE_MAX     = 0x28,
-	BATTERY_CURRENT_MAX     = 0x2c,
+	BATTERY_INT_ENABLE	= 0x04,
+
+	BATTERY_AC_ONLINE	= 0x08,
+	BATTERY_STATUS		= 0x0C,
+	BATTERY_HEALTH		= 0x10,
+	BATTERY_PRESENT		= 0x14,
+	BATTERY_CAPACITY	= 0x18,
+	BATTERY_VOLTAGE		= 0x1C,
+	BATTERY_TEMP		= 0x20,
+	BATTERY_CHARGE_COUNTER	= 0x24,
+	BATTERY_VOLTAGE_MAX	= 0x28,
+	BATTERY_CURRENT_MAX	= 0x2C,
+	BATTERY_CURRENT_NOW	= 0x30,
+	BATTERY_CURRENT_AVG	= 0x34,
+	BATTERY_CHARGE_FULL_UAH	= 0x38,
+	BATTERY_CYCLE_COUNT	= 0x40,
+
 	BATTERY_STATUS_CHANGED	= 1U << 0,
 	AC_STATUS_CHANGED	= 1U << 1,
-	BATTERY_INT_MASK        = BATTERY_STATUS_CHANGED | AC_STATUS_CHANGED,
+	BATTERY_INT_MASK	= BATTERY_STATUS_CHANGED | AC_STATUS_CHANGED,
 };
 
 
@@ -81,7 +70,6 @@ static int goldfish_ac_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_ONLINE:
 		val->intval = GOLDFISH_BATTERY_READ(data, BATTERY_AC_ONLINE);
 		break;
-
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
 		val->intval = GOLDFISH_BATTERY_READ(data, BATTERY_VOLTAGE_MAX);
 		break;
@@ -129,16 +117,17 @@ static int goldfish_battery_get_property(struct power_supply *psy,
 						    BATTERY_CHARGE_COUNTER);
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		val->intval = POWER_SUPPLY_CURRENT_UA;
+		val->intval = GOLDFISH_BATTERY_READ(data, BATTERY_CURRENT_NOW);
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_AVG:
-		val->intval = POWER_SUPPLY_CURRENT_UA;
+		val->intval = GOLDFISH_BATTERY_READ(data, BATTERY_CURRENT_AVG);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		val->intval = POWER_SUPPLY_CHARGE_FULL_UAH;
+		val->intval = GOLDFISH_BATTERY_READ(data,
+						    BATTERY_CHARGE_FULL_UAH);
 		break;
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-		val->intval = 10;
+		val->intval = GOLDFISH_BATTERY_READ(data, BATTERY_CYCLE_COUNT);
 		break;
 	default:
 		ret = -EINVAL;
@@ -237,8 +226,9 @@ static int goldfish_battery_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	ret = devm_request_irq(&pdev->dev, data->irq, goldfish_battery_interrupt,
-						IRQF_SHARED, pdev->name, data);
+	ret = devm_request_irq(&pdev->dev, data->irq,
+			       goldfish_battery_interrupt,
+			       IRQF_SHARED, pdev->name, data);
 	if (ret)
 		return ret;
 
@@ -256,7 +246,6 @@ static int goldfish_battery_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, data);
-	battery_data = data;
 
 	GOLDFISH_BATTERY_WRITE(data, BATTERY_INT_ENABLE, BATTERY_INT_MASK);
 	return 0;
@@ -268,7 +257,6 @@ static int goldfish_battery_remove(struct platform_device *pdev)
 
 	power_supply_unregister(data->battery);
 	power_supply_unregister(data->ac);
-	battery_data = NULL;
 	return 0;
 }
 

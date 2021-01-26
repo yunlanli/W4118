@@ -128,7 +128,6 @@
  */
 
 #include "../workqueue_internal.h"
-#include <uapi/linux/sched/types.h>
 #include <linux/sched/loadavg.h>
 #include <linux/seq_file.h>
 #include <linux/proc_fs.h>
@@ -174,7 +173,7 @@ static u64 psi_period __read_mostly;
 
 /* System-level pressure and stall tracking */
 static DEFINE_PER_CPU(struct psi_group_cpu, system_group_pcpu);
-static struct psi_group psi_system = {
+struct psi_group psi_system = {
 	.pcpu = &system_group_pcpu,
 };
 
@@ -1052,7 +1051,7 @@ struct psi_trigger *psi_trigger_create(struct psi_group *group,
 
 	if (!rcu_access_pointer(group->poll_kworker)) {
 		struct sched_param param = {
-			.sched_priority = MAX_RT_PRIO - 1,
+			.sched_priority = 1,
 		};
 		struct kthread_worker *kworker;
 
@@ -1062,7 +1061,7 @@ struct psi_trigger *psi_trigger_create(struct psi_group *group,
 			mutex_unlock(&group->trigger_lock);
 			return ERR_CAST(kworker);
 		}
-		sched_setscheduler(kworker->task, SCHED_FIFO, &param);
+		sched_setscheduler_nocheck(kworker->task, SCHED_FIFO, &param);
 		kthread_init_delayed_work(&group->poll_work,
 				psi_poll_work);
 		rcu_assign_pointer(group->poll_kworker, kworker);
@@ -1132,7 +1131,15 @@ static void psi_trigger_destroy(struct kref *ref)
 	 * deadlock while waiting for psi_poll_work to acquire trigger_lock
 	 */
 	if (kworker_to_destroy) {
+		/*
+		 * After the RCU grace period has expired, the worker
+		 * can no longer be found through group->poll_kworker.
+		 * But it might have been already scheduled before
+		 * that - deschedule it cleanly before destroying it.
+		 */
 		kthread_cancel_delayed_work_sync(&group->poll_work);
+		atomic_set(&group->poll_scheduled, 0);
+
 		kthread_destroy_worker(kworker_to_destroy);
 	}
 	kfree(t);
@@ -1150,21 +1157,21 @@ void psi_trigger_replace(void **trigger_ptr, struct psi_trigger *new)
 		kref_put(&old->refcount, psi_trigger_destroy);
 }
 
-unsigned int psi_trigger_poll(void **trigger_ptr, struct file *file,
-			      poll_table *wait)
+__poll_t psi_trigger_poll(void **trigger_ptr,
+				struct file *file, poll_table *wait)
 {
-	unsigned int ret = DEFAULT_POLLMASK;
+	__poll_t ret = DEFAULT_POLLMASK;
 	struct psi_trigger *t;
 
 	if (static_branch_likely(&psi_disabled))
-		return DEFAULT_POLLMASK | POLLERR | POLLPRI;
+		return DEFAULT_POLLMASK | EPOLLERR | EPOLLPRI;
 
 	rcu_read_lock();
 
 	t = rcu_dereference(*(void __rcu __force **)trigger_ptr);
 	if (!t) {
 		rcu_read_unlock();
-		return DEFAULT_POLLMASK | POLLERR | POLLPRI;
+		return DEFAULT_POLLMASK | EPOLLERR | EPOLLPRI;
 	}
 	kref_get(&t->refcount);
 
@@ -1173,7 +1180,7 @@ unsigned int psi_trigger_poll(void **trigger_ptr, struct file *file,
 	poll_wait(file, &t->event_wait, wait);
 
 	if (cmpxchg(&t->event, 1, 0) == 1)
-		ret |= POLLPRI;
+		ret |= EPOLLPRI;
 
 	kref_put(&t->refcount, psi_trigger_destroy);
 
@@ -1191,7 +1198,7 @@ static ssize_t psi_write(struct file *file, const char __user *user_buf,
 	if (static_branch_likely(&psi_disabled))
 		return -EOPNOTSUPP;
 
-	buf_size = min(nbytes, (sizeof(buf) - 1));
+	buf_size = min(nbytes, sizeof(buf));
 	if (copy_from_user(buf, user_buf, buf_size))
 		return -EFAULT;
 
@@ -1228,7 +1235,7 @@ static ssize_t psi_cpu_write(struct file *file, const char __user *user_buf,
 	return psi_write(file, user_buf, nbytes, PSI_CPU);
 }
 
-static unsigned int psi_fop_poll(struct file *file, poll_table *wait)
+static __poll_t psi_fop_poll(struct file *file, poll_table *wait)
 {
 	struct seq_file *seq = file->private_data;
 

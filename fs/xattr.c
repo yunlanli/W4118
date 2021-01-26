@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
   File: fs/xattr.c
 
@@ -23,7 +24,6 @@
 #include <linux/posix_acl_xattr.h>
 
 #include <linux/uaccess.h>
-#include "internal.h"
 
 static const char *
 strcmp_prefix(const char *a, const char *a_prefix)
@@ -131,7 +131,7 @@ xattr_permission(struct inode *inode, const char *name, int mask)
 			return -EPERM;
 	}
 
-	return inode_permission2(ERR_PTR(-EOPNOTSUPP), inode, mask);
+	return inode_permission(inode, mask);
 }
 
 int
@@ -229,7 +229,7 @@ out:
 }
 EXPORT_SYMBOL_GPL(vfs_setxattr);
 
-ssize_t
+static ssize_t
 xattr_getsecurity(struct inode *inode, const char *name, void *value,
 			size_t size)
 {
@@ -254,7 +254,6 @@ out:
 out_noalloc:
 	return len;
 }
-EXPORT_SYMBOL_GPL(xattr_getsecurity);
 
 /*
  * vfs_getxattr_alloc - allocate memory, if necessary, before calling getxattr
@@ -354,7 +353,6 @@ vfs_listxattr(struct dentry *dentry, char *list, size_t size)
 	if (error)
 		return error;
 	if (inode->i_op->listxattr && (inode->i_opflags & IOP_XATTR)) {
-		error = -EOPNOTSUPP;
 		error = inode->i_op->listxattr(dentry, list, size);
 	} else {
 		error = security_inode_listsecurity(inode, list, size);
@@ -503,10 +501,10 @@ SYSCALL_DEFINE5(fsetxattr, int, fd, const char __user *, name,
 	if (!f.file)
 		return error;
 	audit_file(f.file);
-	error = mnt_want_write_file_path(f.file);
+	error = mnt_want_write_file(f.file);
 	if (!error) {
 		error = setxattr(f.file->f_path.dentry, name, value, size, flags);
-		mnt_drop_write_file_path(f.file);
+		mnt_drop_write_file(f.file);
 	}
 	fdput(f);
 	return error;
@@ -735,10 +733,10 @@ SYSCALL_DEFINE2(fremovexattr, int, fd, const char __user *, name)
 	if (!f.file)
 		return error;
 	audit_file(f.file);
-	error = mnt_want_write_file_path(f.file);
+	error = mnt_want_write_file(f.file);
 	if (!error) {
 		error = removexattr(f.file->f_path.dentry, name);
-		mnt_drop_write_file_path(f.file);
+		mnt_drop_write_file(f.file);
 	}
 	fdput(f);
 	return error;

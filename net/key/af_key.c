@@ -1,10 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * net/key/af_key.c	An implementation of PF_KEYv2 sockets.
- *
- *		This program is free software; you can redistribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		as published by the Free Software Foundation; either version
- *		2 of the License, or (at your option) any later version.
  *
  * Authors:	Maxim Giryaev	<gem@asplinux.ru>
  *		David S. Miller	<davem@redhat.com>
@@ -932,8 +928,7 @@ static struct sk_buff *__pfkey_xfrm_state2msg(const struct xfrm_state *x,
 		pfkey_sockaddr_fill(&x->props.saddr, 0,
 				    (struct sockaddr *) (addr + 1),
 				    x->props.family);
-	if (!addr->sadb_address_prefixlen)
-		BUG();
+	BUG_ON(!addr->sadb_address_prefixlen);
 
 	/* dst address */
 	addr = skb_put(skb, sizeof(struct sadb_address) + sockaddr_size);
@@ -948,8 +943,7 @@ static struct sk_buff *__pfkey_xfrm_state2msg(const struct xfrm_state *x,
 		pfkey_sockaddr_fill(&x->id.daddr, 0,
 				    (struct sockaddr *) (addr + 1),
 				    x->props.family);
-	if (!addr->sadb_address_prefixlen)
-		BUG();
+	BUG_ON(!addr->sadb_address_prefixlen);
 
 	if (!xfrm_addr_equal(&x->sel.saddr, &x->props.saddr,
 			     x->props.family)) {
@@ -1773,7 +1767,7 @@ static int pfkey_flush(struct sock *sk, struct sk_buff *skb, const struct sadb_m
 	if (proto == 0)
 		return -EINVAL;
 
-	err = xfrm_state_flush(net, proto, true);
+	err = xfrm_state_flush(net, proto, true, false);
 	err2 = unicast_flush_resp(sk, hdr);
 	if (err || err2) {
 		if (err == -ESRCH) /* empty table - go quietly */
@@ -1951,8 +1945,10 @@ parse_ipsecrequest(struct xfrm_policy *xp, struct sadb_x_ipsecrequest *rq)
 
 	if (rq->sadb_x_ipsecrequest_mode == 0)
 		return -EINVAL;
+	if (!xfrm_id_proto_valid(rq->sadb_x_ipsecrequest_proto))
+		return -EINVAL;
 
-	t->id.proto = rq->sadb_x_ipsecrequest_proto; /* XXX check proto */
+	t->id.proto = rq->sadb_x_ipsecrequest_proto;
 	if ((mode = pfkey_mode_to_xfrm(rq->sadb_x_ipsecrequest_mode)) < 0)
 		return -EINVAL;
 	t->mode = mode;
@@ -2010,7 +2006,7 @@ parse_ipsecrequests(struct xfrm_policy *xp, struct sadb_x_policy *pol)
 
 static inline int pfkey_xfrm_policy2sec_ctx_size(const struct xfrm_policy *xp)
 {
-  struct xfrm_sec_ctx *xfrm_ctx = xp->security;
+	struct xfrm_sec_ctx *xfrm_ctx = xp->security;
 
 	if (xfrm_ctx) {
 		int len = sizeof(struct sadb_x_sec_ctx);
@@ -2217,8 +2213,10 @@ static int key_notify_policy(struct xfrm_policy *xp, int dir, const struct km_ev
 		return PTR_ERR(out_skb);
 
 	err = pfkey_xfrm_policy2msg(out_skb, xp, dir);
-	if (err < 0)
+	if (err < 0) {
+		kfree_skb(out_skb);
 		return err;
+	}
 
 	out_hdr = (struct sadb_msg *) out_skb->data;
 	out_hdr->sadb_msg_version = PF_KEY_V2;
@@ -2438,8 +2436,10 @@ static int key_pol_get_resp(struct sock *sk, struct xfrm_policy *xp, const struc
 		goto out;
 	}
 	err = pfkey_xfrm_policy2msg(out_skb, xp, dir);
-	if (err < 0)
+	if (err < 0) {
+		kfree_skb(out_skb);
 		goto out;
+	}
 
 	out_hdr = (struct sadb_msg *) out_skb->data;
 	out_hdr->sadb_msg_version = hdr->sadb_msg_version;
@@ -2690,8 +2690,10 @@ static int dump_sp(struct xfrm_policy *xp, int dir, int count, void *ptr)
 		return PTR_ERR(out_skb);
 
 	err = pfkey_xfrm_policy2msg(out_skb, xp, dir);
-	if (err < 0)
+	if (err < 0) {
+		kfree_skb(out_skb);
 		return err;
+	}
 
 	out_hdr = (struct sadb_msg *) out_skb->data;
 	out_hdr->sadb_msg_version = pfk->dump.msg_version;
@@ -3800,24 +3802,12 @@ static const struct seq_operations pfkey_seq_ops = {
 	.show	= pfkey_seq_show,
 };
 
-static int pfkey_seq_open(struct inode *inode, struct file *file)
-{
-	return seq_open_net(inode, file, &pfkey_seq_ops,
-			    sizeof(struct seq_net_private));
-}
-
-static const struct file_operations pfkey_proc_ops = {
-	.open	 = pfkey_seq_open,
-	.read	 = seq_read,
-	.llseek	 = seq_lseek,
-	.release = seq_release_net,
-};
-
 static int __net_init pfkey_init_proc(struct net *net)
 {
 	struct proc_dir_entry *e;
 
-	e = proc_create("pfkey", 0, net->proc_net, &pfkey_proc_ops);
+	e = proc_create_net("pfkey", 0, net->proc_net, &pfkey_seq_ops,
+			sizeof(struct seq_net_private));
 	if (e == NULL)
 		return -ENOMEM;
 
@@ -3868,7 +3858,7 @@ static void __net_exit pfkey_net_exit(struct net *net)
 	struct netns_pfkey *net_pfkey = net_generic(net, pfkey_net_id);
 
 	pfkey_exit_proc(net);
-	BUG_ON(!hlist_empty(&net_pfkey->table));
+	WARN_ON(!hlist_empty(&net_pfkey->table));
 }
 
 static struct pernet_operations pfkey_net_ops = {

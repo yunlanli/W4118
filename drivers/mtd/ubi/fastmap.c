@@ -1,17 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012 Linutronix GmbH
  * Copyright (c) 2014 sigma star gmbh
  * Author: Richard Weinberger <richard@nod.at>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
- * the GNU General Public License for more details.
- *
  */
 
 #include <linux/crc32.h>
@@ -214,9 +205,8 @@ static void assign_aeb_to_av(struct ubi_attach_info *ai,
 			     struct ubi_ainf_volume *av)
 {
 	struct ubi_ainf_peb *tmp_aeb;
-	struct rb_node **p = &ai->volumes.rb_node, *parent = NULL;
+	struct rb_node **p = &av->root.rb_node, *parent = NULL;
 
-	p = &av->root.rb_node;
 	while (*p) {
 		parent = *p;
 
@@ -1063,7 +1053,7 @@ int ubi_scan_fastmap(struct ubi_device *ubi, struct ubi_attach_info *ai,
 		e = kmem_cache_alloc(ubi_wl_entry_slab, GFP_KERNEL);
 		if (!e) {
 			while (i--)
-				kfree(fm->e[i]);
+				kmem_cache_free(ubi_wl_entry_slab, fm->e[i]);
 
 			ret = -ENOMEM;
 			goto free_hdr;

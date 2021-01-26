@@ -1,8 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 #include <linux/module.h>
 #include <linux/virtio.h>
 #include <linux/virtio_config.h>
 #include <linux/input.h>
-#include <linux/input/mt.h>
 
 #include <uapi/linux/virtio_ids.h>
 #include <uapi/linux/virtio_input.h>
@@ -164,19 +164,6 @@ static void virtinput_cfg_abs(struct virtio_input *vi, int abs)
 	virtio_cread(vi->vdev, struct virtio_input_config, u.abs.flat, &fl);
 	input_set_abs_params(vi->idev, abs, mi, ma, fu, fl);
 	input_abs_set_res(vi->idev, abs, re);
-    if (abs == ABS_MT_TRACKING_ID) {
-		int input_max_finger = ma;
-		// Set the VirtIO Input Device to be multi-touch.
-		// In the Ranchu kernel, there is multi-touch-specific
-		// code for handling ABS_MT_SLOT events.
-		// See drivers/input/input.c:input_handle_abs_event.
-		// If we do not issue input_mt_init_slots,
-		// the kernel will filter out needed ABS_MT_SLOT
-		// events when we touch the screen in more than one place,
-		// preventing multi-touch with more than one finger from
-		// working.
-		input_mt_init_slots(vi->idev, input_max_finger, 0);
-	}
 }
 
 static int virtinput_init_vqs(struct virtio_input *vi)

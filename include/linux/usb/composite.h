@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * composite.h -- framework for usb gadgets which are composite devices
  *
@@ -51,7 +52,7 @@
 #define USB_GADGET_DELAYED_STATUS       0x7fff	/* Impossibly large value */
 
 /* big enough to hold our biggest descriptor */
-#define USB_COMP_EP0_BUFSIZ	1024
+#define USB_COMP_EP0_BUFSIZ	4096
 
 /* OS feature descriptor length <= 4kB */
 #define USB_COMP_EP0_OS_DESC_BUFSIZ	4096
@@ -586,7 +587,6 @@ struct usb_function_instance {
 	struct config_group group;
 	struct list_head cfs_list;
 	struct usb_function_driver *fd;
-	struct usb_function *f;
 	int (*set_inst_name)(struct usb_function_instance *inst,
 			      const char *name);
 	void (*free_func_inst)(struct usb_function_instance *inst);

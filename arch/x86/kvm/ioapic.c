@@ -45,11 +45,6 @@
 #include "lapic.h"
 #include "irq.h"
 
-#if 0
-#define ioapic_debug(fmt,arg...) printk(KERN_WARNING fmt,##arg)
-#else
-#define ioapic_debug(fmt, arg...)
-#endif
 static int ioapic_service(struct kvm_ioapic *vioapic, int irq,
 		bool line_status);
 
@@ -209,12 +204,12 @@ static int ioapic_set_irq(struct kvm_ioapic *ioapic, unsigned int irq,
 
 	old_irr = ioapic->irr;
 	ioapic->irr |= mask;
-	if (edge)
+	if (edge) {
 		ioapic->irr_delivered &= ~mask;
-	if ((edge && old_irr == ioapic->irr) ||
-	    (!edge && entry.fields.remote_irr)) {
-		ret = 0;
-		goto out;
+		if (old_irr == ioapic->irr) {
+			ret = 0;
+			goto out;
+		}
 	}
 
 	ret = ioapic_service(ioapic, irq, line_status);
@@ -294,7 +289,6 @@ static void ioapic_write_indirect(struct kvm_ioapic *ioapic, u32 val)
 	default:
 		index = (ioapic->ioregsel - 0x10) >> 1;
 
-		ioapic_debug("change redir index %x val %x\n", index, val);
 		if (index >= IOAPIC_NUM_PINS)
 			return;
 		e = &ioapic->redirtbl[index];
@@ -338,14 +332,10 @@ static int ioapic_service(struct kvm_ioapic *ioapic, int irq, bool line_status)
 	struct kvm_lapic_irq irqe;
 	int ret;
 
-	if (entry->fields.mask)
+	if (entry->fields.mask ||
+	    (entry->fields.trig_mode == IOAPIC_LEVEL_TRIG &&
+	    entry->fields.remote_irr))
 		return -1;
-
-	ioapic_debug("dest=%x dest_mode=%x delivery_mode=%x "
-		     "vector=%x trig_mode=%x\n",
-		     entry->fields.dest_id, entry->fields.dest_mode,
-		     entry->fields.delivery_mode, entry->fields.vector,
-		     entry->fields.trig_mode);
 
 	irqe.dest_id = entry->fields.dest_id;
 	irqe.vector = entry->fields.vector;
@@ -513,7 +503,6 @@ static int ioapic_mmio_read(struct kvm_vcpu *vcpu, struct kvm_io_device *this,
 	if (!ioapic_in_range(ioapic, addr))
 		return -EOPNOTSUPP;
 
-	ioapic_debug("addr %lx\n", (unsigned long)addr);
 	ASSERT(!(addr & 0xf));	/* check alignment */
 
 	addr &= 0xff;
@@ -556,8 +545,6 @@ static int ioapic_mmio_write(struct kvm_vcpu *vcpu, struct kvm_io_device *this,
 	if (!ioapic_in_range(ioapic, addr))
 		return -EOPNOTSUPP;
 
-	ioapic_debug("ioapic_mmio_write addr=%p len=%d val=%p\n",
-		     (void*)addr, len, val);
 	ASSERT(!(addr & 0xf));	/* check alignment */
 
 	switch (len) {
@@ -620,7 +607,7 @@ int kvm_ioapic_init(struct kvm *kvm)
 	struct kvm_ioapic *ioapic;
 	int ret;
 
-	ioapic = kzalloc(sizeof(struct kvm_ioapic), GFP_KERNEL);
+	ioapic = kzalloc(sizeof(struct kvm_ioapic), GFP_KERNEL_ACCOUNT);
 	if (!ioapic)
 		return -ENOMEM;
 	spin_lock_init(&ioapic->lock);

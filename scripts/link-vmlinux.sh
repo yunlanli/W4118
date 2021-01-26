@@ -3,22 +3,17 @@
 #
 # link vmlinux
 #
-# vmlinux is linked from the objects selected by $(KBUILD_VMLINUX_INIT) and
-# $(KBUILD_VMLINUX_MAIN) and $(KBUILD_VMLINUX_LIBS). Most are built-in.o files
-# from top-level directories in the kernel tree, others are specified in
-# arch/$(ARCH)/Makefile. Ordering when linking is important, and
-# $(KBUILD_VMLINUX_INIT) must be first. $(KBUILD_VMLINUX_LIBS) are archives
-# which are linked conditionally (not within --whole-archive), and do not
-# require symbol indexes added.
+# vmlinux is linked from the objects selected by $(KBUILD_VMLINUX_OBJS) and
+# $(KBUILD_VMLINUX_LIBS). Most are built-in.a files from top-level directories
+# in the kernel tree, others are specified in arch/$(ARCH)/Makefile.
+# $(KBUILD_VMLINUX_LIBS) are archives which are linked conditionally
+# (not within --whole-archive), and do not require symbol indexes added.
 #
 # vmlinux
 #   ^
 #   |
-#   +-< $(KBUILD_VMLINUX_INIT)
-#   |   +--< init/version.o + more
-#   |
-#   +--< $(KBUILD_VMLINUX_MAIN)
-#   |    +--< drivers/built-in.o mm/built-in.o + more
+#   +--< $(KBUILD_VMLINUX_OBJS)
+#   |    +--< init/built-in.a drivers/built-in.a mm/built-in.a + more
 #   |
 #   +--< $(KBUILD_VMLINUX_LIBS)
 #   |    +--< lib/lib.a + more
@@ -40,59 +35,8 @@ set -e
 info()
 {
 	if [ "${quiet}" != "silent_" ]; then
-		printf "  %-7s %s\n" ${1} ${2}
+		printf "  %-7s %s\n" "${1}" "${2}"
 	fi
-}
-
-# Thin archive build here makes a final archive with symbol table and indexes
-# from vmlinux objects INIT and MAIN, which can be used as input to linker.
-# KBUILD_VMLINUX_LIBS archives should already have symbol table and indexes
-# added.
-#
-# Traditional incremental style of link does not require this step
-#
-# built-in.o output file
-#
-archive_builtin()
-{
-	if [ -n "${CONFIG_THIN_ARCHIVES}" ]; then
-		info AR built-in.o
-		rm -f built-in.o;
-		${AR} rcsTP${KBUILD_ARFLAGS} built-in.o			\
-					${KBUILD_VMLINUX_INIT}		\
-					${KBUILD_VMLINUX_MAIN}
-
-		if [ -n "${CONFIG_LTO_CLANG}" ]; then
-			mv -f built-in.o built-in.o.tmp
-			${LLVM_AR} rcsT${KBUILD_ARFLAGS} built-in.o $(${AR} t built-in.o.tmp)
-			rm -f built-in.o.tmp
-		fi
-	fi
-}
-
-# If CONFIG_LTO_CLANG is selected, collect generated symbol versions into
-# .tmp_symversions
-modversions()
-{
-	if [ -z "${CONFIG_LTO_CLANG}" ]; then
-		return
-	fi
-
-	if [ -z "${CONFIG_MODVERSIONS}" ]; then
-		return
-	fi
-
-	rm -f .tmp_symversions
-
-	for a in built-in.o ${KBUILD_VMLINUX_LIBS}; do
-		for o in $(${AR} t $a); do
-			if [ -f ${o}.symversions ]; then
-				cat ${o}.symversions >> .tmp_symversions
-			fi
-		done
-	done
-
-	echo "-T .tmp_symversions"
 }
 
 # Link of vmlinux.o used for section mismatch analysis
@@ -101,104 +45,91 @@ modpost_link()
 {
 	local objects
 
-	if [ -n "${CONFIG_THIN_ARCHIVES}" ]; then
-		objects="--whole-archive				\
-			built-in.o					\
-			--no-whole-archive				\
-			--start-group					\
-			${KBUILD_VMLINUX_LIBS}				\
-			--end-group"
-	else
-		objects="${KBUILD_VMLINUX_INIT}				\
-			--start-group					\
-			${KBUILD_VMLINUX_MAIN}				\
-			${KBUILD_VMLINUX_LIBS}				\
-			--end-group"
-	fi
+	objects="--whole-archive				\
+		${KBUILD_VMLINUX_OBJS}				\
+		--no-whole-archive				\
+		--start-group					\
+		${KBUILD_VMLINUX_LIBS}				\
+		--end-group"
 
-	if [ -n "${CONFIG_LTO_CLANG}" ]; then
-		# This might take a while, so indicate that we're doing
-		# an LTO link
-		info LTO vmlinux.o
-	else
-		info LD vmlinux.o
-	fi
-
-	${LD} ${LDFLAGS} -r -o ${1} $(modversions) ${objects}
-}
-
-# If CONFIG_LTO_CLANG is selected, we postpone running recordmcount until
-# we have compiled LLVM IR to an object file.
-recordmcount()
-{
-	if [ -z "${CONFIG_LTO_CLANG}" ]; then
-		return
-	fi
-
-	if [ -n "${CONFIG_FTRACE_MCOUNT_RECORD}" ]; then
-		scripts/recordmcount ${RECORDMCOUNT_FLAGS} $*
-	fi
+	${LD} ${KBUILD_LDFLAGS} -r -o ${1} ${objects}
 }
 
 # Link of vmlinux
-# ${1} - optional extra .o files
-# ${2} - output file
+# ${1} - output file
+# ${2}, ${3}, ... - optional extra .o files
 vmlinux_link()
 {
 	local lds="${objtree}/${KBUILD_LDS}"
+	local output=${1}
 	local objects
 
+	info LD ${output}
+
+	# skip output file argument
+	shift
+
 	if [ "${SRCARCH}" != "um" ]; then
-		local ld=${LD}
-		local ldflags="${LDFLAGS} ${LDFLAGS_vmlinux}"
+		objects="--whole-archive			\
+			${KBUILD_VMLINUX_OBJS}			\
+			--no-whole-archive			\
+			--start-group				\
+			${KBUILD_VMLINUX_LIBS}			\
+			--end-group				\
+			${@}"
 
-		if [ -n "${LDFINAL_vmlinux}" ]; then
-			ld=${LDFINAL_vmlinux}
-			ldflags="${LDFLAGS_FINAL_vmlinux} ${LDFLAGS_vmlinux}"
-		fi
-
-		if [[ -n "${CONFIG_THIN_ARCHIVES}" && -z "${CONFIG_LTO_CLANG}" ]]; then
-			objects="--whole-archive 			\
-				built-in.o				\
-				--no-whole-archive			\
-				--start-group				\
-				${KBUILD_VMLINUX_LIBS}			\
-				--end-group				\
-				${1}"
-		else
-			objects="${KBUILD_VMLINUX_INIT}			\
-				--start-group				\
-				${KBUILD_VMLINUX_MAIN}			\
-				${KBUILD_VMLINUX_LIBS}			\
-				--end-group				\
-				${1}"
-		fi
-
-		${ld} ${ldflags} -o ${2} -T ${lds} ${objects}
+		${LD} ${KBUILD_LDFLAGS} ${LDFLAGS_vmlinux}	\
+			-o ${output}				\
+			-T ${lds} ${objects}
 	else
-		if [ -n "${CONFIG_THIN_ARCHIVES}" ]; then
-			objects="-Wl,--whole-archive			\
-				built-in.o				\
-				-Wl,--no-whole-archive			\
-				-Wl,--start-group			\
-				${KBUILD_VMLINUX_LIBS}			\
-				-Wl,--end-group				\
-				${1}"
-		else
-			objects="${KBUILD_VMLINUX_INIT}			\
-				-Wl,--start-group			\
-				${KBUILD_VMLINUX_MAIN}			\
-				${KBUILD_VMLINUX_LIBS}			\
-				-Wl,--end-group				\
-				${1}"
-		fi
+		objects="-Wl,--whole-archive			\
+			${KBUILD_VMLINUX_OBJS}			\
+			-Wl,--no-whole-archive			\
+			-Wl,--start-group			\
+			${KBUILD_VMLINUX_LIBS}			\
+			-Wl,--end-group				\
+			${@}"
 
-		${CC} ${CFLAGS_vmlinux} -o ${2}				\
-			-Wl,-T,${lds}					\
-			${objects}					\
+		${CC} ${CFLAGS_vmlinux}				\
+			-o ${output}				\
+			-Wl,-T,${lds}				\
+			${objects}				\
 			-lutil -lrt -lpthread
 		rm -f linux
 	fi
+}
+
+# generate .BTF typeinfo from DWARF debuginfo
+# ${1} - vmlinux image
+# ${2} - file to dump raw BTF data into
+gen_btf()
+{
+	local pahole_ver
+	local bin_arch
+
+	if ! [ -x "$(command -v ${PAHOLE})" ]; then
+		info "BTF" "${1}: pahole (${PAHOLE}) is not available"
+		return 1
+	fi
+
+	pahole_ver=$(${PAHOLE} --version | sed -E 's/v([0-9]+)\.([0-9]+)/\1\2/')
+	if [ "${pahole_ver}" -lt "113" ]; then
+		info "BTF" "${1}: pahole version $(${PAHOLE} --version) is too old, need at least v1.13"
+		return 1
+	fi
+
+	info "BTF" ${2}
+	vmlinux_link ${1}
+	LLVM_OBJCOPY=${OBJCOPY} ${PAHOLE} -J ${1}
+
+	# dump .BTF section into raw binary file to link with final vmlinux
+	bin_arch=$(LANG=C ${OBJDUMP} -f ${1} | grep architecture | \
+		cut -d, -f1 | cut -d' ' -f2)
+	bin_format=$(LANG=C ${OBJDUMP} -f ${1} | grep 'file format' | \
+		awk '{print $4}')
+	${OBJCOPY} --dump-section .BTF=.btf.vmlinux.bin ${1} 2>/dev/null
+	${OBJCOPY} -I binary -O ${bin_format} -B ${bin_arch} \
+		--rename-section .data=.BTF .btf.vmlinux.bin ${2}
 }
 
 # Create ${2} .o file with all symbols from the ${1} object file
@@ -206,10 +137,6 @@ kallsyms()
 {
 	info KSYM ${2}
 	local kallsymopt;
-
-	if [ -n "${CONFIG_HAVE_UNDERSCORE_SYMBOL_PREFIX}" ]; then
-		kallsymopt="${kallsymopt} --symbol-prefix=_"
-	fi
 
 	if [ -n "${CONFIG_KALLSYMS_ALL}" ]; then
 		kallsymopt="${kallsymopt} --all-symbols"
@@ -232,6 +159,18 @@ kallsyms()
 	${CC} ${aflags} -c -o ${2} ${afile}
 }
 
+# Perform one step in kallsyms generation, including temporary linking of
+# vmlinux.
+kallsyms_step()
+{
+	kallsymso_prev=${kallsymso}
+	kallsymso=.tmp_kallsyms${1}.o
+	kallsyms_vmlinux=.tmp_vmlinux${1}
+
+	vmlinux_link ${kallsyms_vmlinux} "${kallsymso_prev}" ${btf_vmlinux_bin_o}
+	kallsyms ${kallsyms_vmlinux} ${kallsymso}
+}
+
 # Create map file with all symbols from ${1}
 # See mksymap for additional details
 mksysmap()
@@ -247,13 +186,10 @@ sortextable()
 # Delete output files in case of error
 cleanup()
 {
-	rm -f .old_version
+	rm -f .btf.*
 	rm -f .tmp_System.map
 	rm -f .tmp_kallsyms*
-	rm -f .tmp_version
-	rm -f .tmp_symversions
 	rm -f .tmp_vmlinux*
-	rm -f built-in.o
 	rm -f System.map
 	rm -f vmlinux
 	rm -f vmlinux.o
@@ -288,48 +224,40 @@ if [ "$1" = "clean" ]; then
 fi
 
 # We need access to CONFIG_ symbols
-case "${KCONFIG_CONFIG}" in
-*/*)
-	. "${KCONFIG_CONFIG}"
-	;;
-*)
-	# Force using a file from the current directory
-	. "./${KCONFIG_CONFIG}"
-esac
+. include/config/auto.conf
 
 # Update version
 info GEN .version
-if [ ! -r .version ]; then
-	rm -f .version;
-	echo 1 >.version;
+if [ -r .version ]; then
+	VERSION=$(expr 0$(cat .version) + 1)
+	echo $VERSION > .version
 else
-	mv .version .old_version;
-	expr 0$(cat .old_version) + 1 >.version;
+	rm -f .version
+	echo 1 > .version
 fi;
 
 # final build of init/
-${MAKE} -f "${srctree}/scripts/Makefile.build" obj=init GCC_PLUGINS_CFLAGS="${GCC_PLUGINS_CFLAGS}"
-
-archive_builtin
+${MAKE} -f "${srctree}/scripts/Makefile.build" obj=init
 
 #link vmlinux.o
+info LD vmlinux.o
 modpost_link vmlinux.o
 
 # modpost vmlinux.o to check for section mismatches
-${MAKE} -f "${srctree}/scripts/Makefile.modpost" vmlinux.o
+${MAKE} -f "${srctree}/scripts/Makefile.modpost" MODPOST_VMLINUX=1
 
-if [ -n "${CONFIG_LTO_CLANG}" ]; then
-	# Re-use vmlinux.o, so we can avoid the slow LTO link step in
-	# vmlinux_link
-	KBUILD_VMLINUX_INIT=
-	KBUILD_VMLINUX_MAIN=vmlinux.o
-	KBUILD_VMLINUX_LIBS=
+info MODINFO modules.builtin.modinfo
+${OBJCOPY} -j .modinfo -O binary vmlinux.o modules.builtin.modinfo
 
-	# Call recordmcount if needed
-	recordmcount vmlinux.o
+btf_vmlinux_bin_o=""
+if [ -n "${CONFIG_DEBUG_INFO_BTF}" ]; then
+	if gen_btf .tmp_vmlinux.btf .btf.vmlinux.bin.o ; then
+		btf_vmlinux_bin_o=.btf.vmlinux.bin.o
+	fi
 fi
 
 kallsymso=""
+kallsymso_prev=""
 kallsyms_vmlinux=""
 if [ -n "${CONFIG_KALLSYMS}" ]; then
 
@@ -356,33 +284,19 @@ if [ -n "${CONFIG_KALLSYMS}" ]; then
 	# a)  Verify that the System.map from vmlinux matches the map from
 	#     ${kallsymso}.
 
-	kallsymso=.tmp_kallsyms2.o
-	kallsyms_vmlinux=.tmp_vmlinux2
-
-	# step 1
-	vmlinux_link "" .tmp_vmlinux1
-	kallsyms .tmp_vmlinux1 .tmp_kallsyms1.o
-
-	# step 2
-	vmlinux_link .tmp_kallsyms1.o .tmp_vmlinux2
-	kallsyms .tmp_vmlinux2 .tmp_kallsyms2.o
+	kallsyms_step 1
+	kallsyms_step 2
 
 	# step 3
-	size1=$(stat -c "%s" .tmp_kallsyms1.o)
-	size2=$(stat -c "%s" .tmp_kallsyms2.o)
+	size1=$(${CONFIG_SHELL} "${srctree}/scripts/file-size.sh" ${kallsymso_prev})
+	size2=$(${CONFIG_SHELL} "${srctree}/scripts/file-size.sh" ${kallsymso})
 
 	if [ $size1 -ne $size2 ] || [ -n "${KALLSYMS_EXTRA_PASS}" ]; then
-		kallsymso=.tmp_kallsyms3.o
-		kallsyms_vmlinux=.tmp_vmlinux3
-
-		vmlinux_link .tmp_kallsyms2.o .tmp_vmlinux3
-
-		kallsyms .tmp_vmlinux3 .tmp_kallsyms3.o
+		kallsyms_step 3
 	fi
 fi
 
-info LD vmlinux
-vmlinux_link "${kallsymso}" vmlinux
+vmlinux_link vmlinux "${kallsymso}" ${btf_vmlinux_bin_o}
 
 if [ -n "${CONFIG_BUILDTIME_EXTABLE_SORT}" ]; then
 	info SORTEX vmlinux
@@ -402,6 +316,3 @@ if [ -n "${CONFIG_KALLSYMS}" ]; then
 		exit 1
 	fi
 fi
-
-# We made a new kernel - delete old version file
-rm -f .old_version
