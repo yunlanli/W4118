@@ -372,6 +372,8 @@ asmlinkage long sys_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg);
 asmlinkage long sys_fcntl64(unsigned int fd,
 				unsigned int cmd, unsigned long arg);
 #endif
+/* kernel/ptree.c  */
+asmlinkage long sys_ptree(struct prinfo *buf, int *nr, int root_pid);
 
 /* fs/inotify_user.c */
 asmlinkage long sys_inotify_init1(int flags);

@@ -1,6 +1,7 @@
-#include <linux/prinfo.h>
+#include "./prinfo.h"
+#include <linux/syscalls.h>
 
-int ptree(struct prinfo *buf, int *nr, int root_pid)
+SYSCALL_DEFINE3(ptree, struct prinfo *, buf, int *, nr, int, root_pid)
 {
-	return 0;
+	return 69;
 }
