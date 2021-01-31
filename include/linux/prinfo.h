@@ -1,6 +1,7 @@
 #ifndef __KERNEL_PRINFO__
 #define __KERNEL_PRINFO__
 
+#include <linux/pid.h>
 struct prinfo {
 	pid_t parent_pid;       /* process id of parent */
 	pid_t pid;              /* process id */
