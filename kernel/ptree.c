@@ -18,6 +18,8 @@
 #include <linux/kfifo.h>
 #include <linux/list.h>
 #include <linux/printk.h>
+#include <linux/kern_levels.h>
+#include <linux/slab.h>
 
 static struct task_struct *get_root(int root_pid)
 {
@@ -27,6 +29,12 @@ static struct task_struct *get_root(int root_pid)
 	return find_task_by_vpid(root_pid);
 }
 
+struct test_struct {
+	int num;
+	struct list_head list;
+};
+
+#if 0
 struct task_node {
 	struct task_struct *task;
 	struct list_head list_node;
@@ -84,8 +92,10 @@ struct task_struct *task_add(
 	return NULL;
 }
 
+#endif
 SYSCALL_DEFINE3(ptree, typeof(struct prinfo *), buf, int *, nr, int, root_pid)
 {
+#if 0
 	/* 
 	 * initialize variables that will be used for storing task_struct info
 	 */
@@ -141,6 +151,59 @@ SYSCALL_DEFINE3(ptree, typeof(struct prinfo *), buf, int *, nr, int, root_pid)
 //	}
 
 	read_unlock(&tasklist_lock);
+#endif
 
-	return 69;
+	struct test_struct *lst, *cur, *tail;
+	struct list_head *lst_head;
+	int nr_cp, i, sum;
+
+	printk(KERN_DEBUG "Initialized variables.\n");
+	/* copies the content ptr points to, should 3rd param be sizeof(int)? */
+	sum = 0;
+	if (copy_from_user(&nr_cp, nr, sizeof(nr_cp)))
+		return -EFAULT;
+	printk(KERN_DEBUG "sum: %d, nr: %d\n", sum, nr_cp);
+	
+
+	printk(KERN_DEBUG "Allocating memory on the heap for llist...\n");
+	/* initialize linked list on the heap */
+	lst = (struct test_struct *) kmalloc(sizeof(struct test_struct) * nr_cp, GFP_KERNEL);
+	printk(KERN_DEBUG "Memory allocation done\n");
+
+	/* iterate through lst to initialize the linked list */
+	INIT_LIST_HEAD(&lst->list);
+	cur = lst, tail = lst;
+	cur->num = 0;
+
+
+	printk(KERN_DEBUG "Iterating the list of struct...\n");
+	for (i = 1; i < nr_cp; i++) {
+		cur++;
+		
+		cur->num = i;
+		printk(KERN_DEBUG "pupulating %d-th test-struct with %d\n", i, cur->num);
+		
+		
+		/* add cur->list to the end of the list */
+		list_add(&cur->list, &tail->list);
+		tail++;
+	}
+
+	printk(KERN_DEBUG "Iteration done\n");
+
+	lst_head = &lst->list;
+	for (i = 0; i < nr_cp; i++) {
+		cur = list_entry(lst_head, struct test_struct, list);
+		printk(KERN_DEBUG "%d-th: %d, ", i, cur->num);
+		sum += cur->num;
+
+		lst_head = lst_head->next;
+	}
+
+	printk(KERN_DEBUG "sum: %d\n", sum);
+	
+	kfree(lst);
+
+
+	return sum;
 }
