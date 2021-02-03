@@ -29,10 +29,12 @@ static struct task_struct *get_root(int root_pid)
 	return find_task_by_vpid(root_pid);
 }
 
+#if 0
 struct test_struct {
 	int num;
 	struct list_head list;
 };
+#endif
 
 #if 0
 struct task_node {
@@ -93,8 +95,104 @@ struct task_struct *task_add(
 }
 
 #endif
+
 SYSCALL_DEFINE3(ptree, typeof(struct prinfo *), buf, int *, nr, int, root_pid)
 {
+	struct task_struct *task, *task_parent;
+	struct prinfo *buf_tmp, *buf_hd;
+	struct list_head *list;
+	int nr_cp, i, seen, stored;
+
+	if (copy_from_user(&nr_cp, nr, sizeof(nr_cp)))
+		return -EFAULT;
+	printk(KERN_DEBUG "nr: %d\n", nr_cp);
+
+	seen = 0, stored = 0;
+	
+
+	// printk(KERN_DEBUG "Allocating memory on the heap for array...\n");
+	buf_tmp = (struct prinfo *) kmalloc(sizeof(struct prinfo) * (nr_cp), GFP_KERNEL);
+	// printk(KERN_DEBUG "Memory allocation success!\n");
+	
+	buf_hd = buf_tmp;
+
+	task = get_root(root_pid);
+	printk(KERN_DEBUG "get_root success.\n");
+	
+	task_parent = task->real_parent;
+
+	buf_hd->pid = task->pid;
+	buf_hd->parent_pid = task_parent == NULL ? 0 : task_parent->pid;
+	printk(KERN_DEBUG "[root] pid: %d, parent: %d\n", task->pid, buf_hd->parent_pid);
+	
+	buf_hd++;
+	seen++;
+	stored++;
+
+	list = task->children.next;
+	printk(KERN_DEBUG "[root: %s] ptr: %p, childen: %p\n", task->comm, task, &task->children);
+	printk(KERN_DEBUG "[1st child] children field address: %p\n", list);
+	
+
+	printk(KERN_DEBUG "start traversal...\n");
+
+	/* traverse the process tree */
+	/* read_lock(&tasklist_lock); */
+
+	/* get the task_struct of next element */
+	task = list_entry(list, struct task_struct, sibling);
+	task_parent = task->real_parent;
+	printk(KERN_DEBUG "[1st child: %s] ptr address: %p\n", task->comm, task);
+	
+	if (task_parent == NULL)
+		printk(KERN_DEBUG "Failed to retrieve parent task.\n");
+		
+
+	buf_hd->pid = task->pid;
+	buf_hd->parent_pid = task_parent == NULL ? 0 : task_parent->pid;
+
+	printk(KERN_DEBUG "[1st child] pid: %d, parent pid: %d\n",
+				task->pid, buf_hd->parent_pid);
+
+
+	buf_hd++;
+	seen++;
+	stored++;
+	list = task->sibling.next;
+
+	/* siblings */
+	while (list != NULL && seen < nr_cp) {
+		task = list_entry(list, struct task_struct, sibling);
+		task_parent = task->real_parent;
+
+		buf_hd->pid = task->pid;
+		buf_hd->parent_pid = task_parent == NULL ? 0 : task_parent->pid;
+
+		printk(KERN_DEBUG "[sibling] pid: %d, parent pid: %d\n",
+				buf_hd->pid, buf_hd->parent_pid);
+
+		buf_hd++;
+		seen++;
+		stored++;
+		list = list->next;
+	}
+
+	/* read_unlock(&tasklist_lock); */
+
+	printk(KERN_DEBUG "Unlocked, traversal done.\n");
+	
+	/* print each process's pid and pid */
+	buf_hd = buf_tmp;
+	for (i = 0; i < stored; i++) {
+		printk(KERN_DEBUG "pid: %d, parent pid: %d\n",
+				buf_hd->pid, buf_hd->parent_pid);
+		buf_hd++;
+	}
+
+	kfree(buf_tmp);
+
+	return stored;
+		
 #if 0
 	/* 
 	 * initialize variables that will be used for storing task_struct info
@@ -153,6 +251,7 @@ SYSCALL_DEFINE3(ptree, typeof(struct prinfo *), buf, int *, nr, int, root_pid)
 	read_unlock(&tasklist_lock);
 #endif
 
+#if 0
 	struct test_struct *lst, *cur, *tail;
 	struct list_head *lst_head;
 	int nr_cp, i, sum;
@@ -206,4 +305,5 @@ SYSCALL_DEFINE3(ptree, typeof(struct prinfo *), buf, int *, nr, int, root_pid)
 
 
 	return sum;
+#endif
 }
