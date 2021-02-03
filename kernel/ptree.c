@@ -2,7 +2,6 @@
 #include <linux/syscalls.h>
 #include <linux/uaccess.h>
 #include <linux/slab.h>
-#include <linux/printk.h>
 #include <linux/kern_levels.h>
 #include <linux/rwlock.h>
 
@@ -50,14 +49,12 @@ SYSCALL_DEFINE3(ptree, struct prinfo *, buf, int *, nr, int, root_pid)
 
 	/* first element/initialization */
 	fill_in_prinfo(&(res_list[head]), root, level);
-	printk(KERN_DEBUG "initialization\n");
 	size++;
 
 	/* array traversal */
 	while (size < nr_loc && head <= size) {
 		/* obtains the un-visited element */
 		curr = &(res_list[head++]);
-		printk(KERN_DEBUG "head node, %s\n", curr->comm);
 		tmp = get_root(curr->pid);
 		if (list_empty( &(tmp->children) ))
 			continue;
@@ -67,7 +64,6 @@ SYSCALL_DEFINE3(ptree, struct prinfo *, buf, int *, nr, int, root_pid)
 		list_for_each(p, &tmp->children) {
 			if (size < nr_loc) {
 				child = list_entry(p, struct task_struct, sibling);
-				printk(KERN_DEBUG "child got, %s\n", child->comm);
 				fill_in_prinfo(&(res_list[size++]), child, level);
 			}else{
 				break;
