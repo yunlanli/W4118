@@ -6,6 +6,7 @@
 #include <linux/kern_levels.h>
 #include <linux/rwlock.h>
 
+/* helper functions */
 static struct task_struct *get_root(int root_pid)
 {
 	if (root_pid == 0)
@@ -14,10 +15,7 @@ static struct task_struct *get_root(int root_pid)
 	return find_task_by_vpid(root_pid);
 }
 
-/* change this */
-int fill_in_prinfo(struct prinfo *dest, 
-		struct prinfo *source,
-		int level)
+void fill_in_prinfo(struct prinfo *data, struct task_struct *source, int level)
 {
 	data->pid = source->pid;
 	data->parent_pid = source->real_parent->pid;
@@ -39,8 +37,6 @@ SYSCALL_DEFINE3(ptree, struct prinfo *, buf, int *, nr, int, root_pid)
 	/* error detection */
 	if (buf == NULL || nr == NULL)
 		return -EINVAL;
-	
-	tsk_list = kmalloc(sizeof(struct task_node) * (*nr), GFP_KERNEL);
 
 	if (copy_from_user(&nr_loc, nr, sizeof(int)))
 		return -EFAULT;
