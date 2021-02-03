@@ -1,15 +1,10 @@
 #include <linux/prinfo.h>
 #include <linux/syscalls.h>
-#include <linux/list.h>
-#include <linux/sched.h>
-#include <linux/string.h>
-#include <linux/cred.h>
+#include <linux/uaccess.h>
 #include <linux/slab.h>
-
-struct task_node {
-	struct prinfo info; 
-	struct list_head list;
-};
+#include <linux/printk.h>
+#include <linux/kern_levels.h>
+#include <linux/rwlock.h>
 
 static struct task_struct *get_root(int root_pid)
 {
@@ -21,57 +16,74 @@ static struct task_struct *get_root(int root_pid)
 
 /* change this */
 int fill_in_prinfo(struct prinfo *dest, 
-		struct prinfo *source)
+		struct prinfo *source,
+		int level)
 {
-	struct prinfo tmp;
-	kuid_t uid_tmp;
-
-	// TODO: see if there are getters
-	tmp.parent_pid = parent_pid;
-	tmp.pid = source->pid;
-	tmp.state = source->state;
-	uid_tmp = task_uid(source);
-	tmp.uid = uid_tmp.val;
-	strncpy(tmp.comm, source->comm, sizeof(tmp.comm));
-	tmp.level = level;
-
-	if (copy_to_user(dest, &tmp, sizeof(tmp)))
-		return -EFAULT;
-	return 0;
+	data->pid = source->pid;
+	data->parent_pid = source->real_parent->pid;
+	data->state = source->state;
+	data->uid = source->cred->uid.val;
+	strncpy(data->comm, source->comm, sizeof(data->comm));
+	data->level = level;
 }
 
-
 SYSCALL_DEFINE3(ptree, struct prinfo *, buf, int *, nr, int, root_pid)
-{
-	struct task_struct *root;
-	struct task_node *tsk_list;
-	struct task_node tmp;
-	int task_num;
-	int nr_tmp;
+{	
+	/* kernel space variables */
+	int nr_loc;
+	int level = 0, head = 0, size = 0;
+	struct task_struct *root, *child, *tmp;
+	struct prinfo *res_list, *curr;
+	struct list_head *p;
 
-	/* 1. copy nr */
-	if (nr < 1)
-		return -EINVAL;
-	
-	root = get_root(root_pid);
-	if (root == NULL)
+	/* error detection */
+	if (buf == NULL || nr == NULL)
 		return -EINVAL;
 	
 	tsk_list = kmalloc(sizeof(struct task_node) * (*nr), GFP_KERNEL);
 
-	/* locked */
-	/* initializing the queue */
-	initialize_linked_list()
-
-	/* BFS */
-	/*  TODO: check empty queue */
-	for (; task_num < nr && list_empty(); task_num++) {
-		// pop first element
-		// add all children's siblings and configure the level/parent
-	}
-	/* unlock */
+	if (copy_from_user(&nr_loc, nr, sizeof(int)))
+		return -EFAULT;
 	
-	/* copy struct information in a loop */
+	root = get_root(root_pid);
+	if (root == NULL || nr_loc < 1)
+		return -EINVAL;
+		
+	res_list = (struct prinfo*) kmalloc(sizeof(struct prinfo) * nr_loc, GFP_KERNEL);
+	read_lock(&tasklist_lock);
 
-	return fill_in_prinfo(buf, root, 11, 11);
+	/* first element/initialization */
+	fill_in_prinfo(&(res_list[head]), root, level);
+	printk(KERN_DEBUG "initialization\n");
+	size++;
+
+	/* array traversal */
+	while (size < nr_loc && head <= size) {
+		/* obtains the un-visited element */
+		curr = &(res_list[head++]);
+		printk(KERN_DEBUG "head node, %s\n", curr->comm);
+		tmp = get_root(curr->pid);
+		if (list_empty( &(tmp->children) ))
+			continue;
+		
+		level = curr->level+1;
+		/* adds the children into the back of the  res_list */
+		list_for_each(p, &tmp->children) {
+			if (size < nr_loc) {
+				child = list_entry(p, struct task_struct, sibling);
+				printk(KERN_DEBUG "child got, %s\n", child->comm);
+				fill_in_prinfo(&(res_list[size++]), child, level);
+			}else{
+				break;
+			}
+		}
+	}
+	
+	read_unlock(&tasklist_lock);
+	if (copy_to_user(buf, res_list, sizeof(struct prinfo) * nr_loc) || 
+			copy_to_user(nr, &size, sizeof(int)))
+			return -EFAULT;
+
+	kfree(res_list);
+	return 0;
 }
