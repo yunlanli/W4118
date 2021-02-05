@@ -17,7 +17,8 @@ static struct task_struct *get_root(int root_pid)
 void fill_in_prinfo(struct prinfo *data, struct task_struct *source, int level)
 {
 	data->pid = source->pid;
-	data->parent_pid = source->real_parent->pid;
+	data->parent_pid = source->real_parent == NULL ? 
+		0 : source->real_parent->pid;
 	data->state = source->state;
 	data->uid = source->cred->uid.val;
 	strncpy(data->comm, source->comm, sizeof(data->comm));
@@ -33,6 +34,9 @@ SYSCALL_DEFINE3(ptree, struct prinfo *, buf, int *, nr, int, root_pid)
 	struct prinfo *res_list, *curr;
 	struct list_head *p;
 
+	/* initialize nr to 0 */
+	copy_to_user(nr, &size, sizeof(int));
+	
 	/* error detection */
 	if (buf == NULL || nr == NULL)
 		return -EINVAL;
