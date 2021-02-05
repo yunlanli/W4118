@@ -52,7 +52,7 @@ SYSCALL_DEFINE3(ptree, struct prinfo *, buf, int *, nr, int, root_pid)
 	size++;
 
 	/* array traversal */
-	while (size < nr_loc && head <= size) {
+	while (size < nr_loc && head < size) {
 		/* obtains the un-visited element */
 		curr = &(res_list[head++]);
 		tmp = get_root(curr->pid);
