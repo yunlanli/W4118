@@ -1,6 +1,11 @@
 #include <linux/pstrace.h>
 #include <linux/syscalls.h>
 
+void pstrace_add(struct task_struct *p)
+{
+	
+}
+
 SYSCALL_DEFINE1(pstrace_enable, pid_t, pid)
 {
 	return 0;
