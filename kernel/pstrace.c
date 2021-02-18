@@ -23,7 +23,14 @@ static inline void set_pid_invalid(struct list_head *node)
 	container->valid = 0;
 }
 
-/* clear linked list of pids */
+/* 
+ * clear linked list of pids
+ *
+ *	To clear linked list of pid, for each node in the linked
+ *	list:
+ *	a) set its container's valid field to 0
+ *	b) remove it from the list
+ */
 static inline void clear_pid_list(void)
 {
 	struct list_head *pos;
@@ -95,11 +102,6 @@ SYSCALL_DEFINE1(pstrace_enable, pid_t, pid)
 		 *
 		 * 2. enabled_all = 1, we are currently disabe tracing a list of pids:
 		 *    clear linked list of pid, update pid_next_write
-		 *
-		 *	To clear linked list of pid, for each node in the linked
-		 *	list:
-		 *	a) set its container's valid field to 0
-		 *	b) remove it from the list
 		 */
 		
 		if (!enabled_all)
@@ -109,19 +111,19 @@ SYSCALL_DEFINE1(pstrace_enable, pid_t, pid)
 
 		/* update pid_next_write to first spot in the array traced */
 		pid_next_write = traced;
+		goto return_from_enable;
 	} else if (pid < 0) {
 		/* invalid pid, do nothing */
 		goto return_from_enable;
 	}
 
-	/* single valid pid to trace
-	 * 1. enabled_all = 0, add pid to linked list if it isn't in it,
-	 * update pid_next_write
-	 * 
-	 * 2. enabled_all = 1, remove pid from linked list if it's in
-	 * it, and set pid invalid
+	/* single valid pid to disable tracing
+	 * 1. enabled_all = 0, pid list contains pids being traced
+	 * add pid to linked list if it's not in it, update next write
+	 *
+	 * 2. enabled_all = 1, pid list contains pids being disabled tracing
+	 * remove pid from linked list if it is in it, set pspid invalid
 	 */
-
 	if (!enabled_all) {
 		pos = list_find(&pid_list_head, pid);
 		if (pos == NULL) {
@@ -143,11 +145,63 @@ SYSCALL_DEFINE1(pstrace_enable, pid_t, pid)
 
 return_from_enable:
 	return 0;
-
 }
 
 SYSCALL_DEFINE1(pstrace_disable, pid_t, pid)
 {
+	struct list_head *pos;
+
+	if (pid == -1) {
+		/* stop tracing all processes
+		 * 1. enabled_all = 0, we are currently tracing a list of pids:
+		 *    clear linked list of pids
+		 *
+		 * 2. enabled_all = 1, we are currently disable tracing a list of pids:
+		 *    set enabled_all = 0, clear linked list of pid. list of
+		 *    pids are now used to store pids to trace.
+		 */
+
+		if (enabled_all)
+			enabled_all = 0;
+
+		clear_pid_list();
+
+		/* update pid_next_write to first spot in the array traced */
+		pid_next_write = traced;
+		goto return_from_disable;
+	} else if (pid < 0) {
+		/* invalid pid, do nothing */
+		goto return_from_disable;
+	}
+
+	/* single valid pid to disable tracing
+	 * 1. enabled_all = 0, pid list contains pids being traced
+	 * remove pid from linked list if it is in it, set pspid invalid
+	 * 
+	 * 2. enabled_all = 1, pid list contains pids being disabled tracing
+	 * add pid to linked list if it's not in it, update next write
+ 	 */
+
+	if (enabled_all) {
+		pos = list_find(&pid_list_head, pid);
+		if (pos == NULL) {
+			/* fill struct and add to pid list */
+			pid_next_write->pid = pid;
+			pid_next_write->valid = 1;
+			list_add_tail(&pid_next_write->list, &pid_list_head);
+
+			/* find next write position */
+			find_pid_next_write();
+		}
+	} else {
+		pos = list_find(&pid_list_head, pid);
+		if (pos != NULL) {
+			set_pid_invalid(pos);
+			__list_del(pos->prev, pos->next); /* remove pid from linked list */
+		}
+	}
+
+return_from_disable:
 	return 0;
 }
 
