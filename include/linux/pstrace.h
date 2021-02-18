@@ -11,12 +11,13 @@ struct cbnode { /* circular buffer node */
 		char comm[16];		/* The name of the process */
 		pid_t pid;		/* The pid of the process */
 		long state;		/* The state of the process */
-	};
+	} p_info;
 	struct list_head head;
 };
 
 struct traced_pid_node{
 	pid_t pid;
+	int valid; /* 0 is invalid and 1 is valid */
 	struct list_head head;
 };
 
