@@ -13,13 +13,6 @@ struct pstrace {
 	long state;		/* The state of the process */
 };
 
-/* The data structure of elements in the pstrace ring buffer */
-struct psrecord {
-    struct pstrace info;
-    struct list_head list;
-    int valid;
-};
-
 /* The data structure used to keep track of process being traced */
 struct pspid {
     pid_t pid;
