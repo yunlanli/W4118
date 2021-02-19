@@ -2540,6 +2540,7 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 		cpu = task_cpu(p);
 		trace_sched_waking(p);
 		p->state = TASK_RUNNING;
+		pstrace_add(p);
 		trace_sched_wakeup(p);
 		goto out;
 	}
