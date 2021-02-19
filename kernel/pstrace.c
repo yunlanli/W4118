@@ -4,10 +4,13 @@
 #include <linux/list.h>
 #include <linux/spinlock_types.h>
 #include <linux/spinlock.h>
+#include <linux/preempt.h>
 #include <linux/printk.h>
 
 int enabled_all = 0; /* flag to indicate if all processes are enabled tracing */
-struct pspid traced[PSTRACE_BUF_SIZE];  /* buffer to store traced process pid */
+struct pspid traced[PSTRACE_BUF_SIZE] = { 
+	[0 ... PSTRACE_BUF_SIZE - 1] = { .valid = 0 } 
+};  /* buffer to store traced process pid */
 
 LIST_HEAD(pid_list_head); /* list head of traced_list */
 
@@ -62,9 +65,14 @@ static inline void find_pid_next_write(void)
 	 * 2. if 1) not found, over-write the first pid whose list field is
 	 * *head->next
 	 */
-	for (i = 0; i < PSTRACE_BUF_SIZE; i++) {
-		if (!traced[i].valid) {
-			pid_next_write = &traced[i];
+	
+	struct list_head *pos;
+	struct pspid *container;
+
+	list_for_each(pos, &pid_list_head) {
+		container = list_entry(pos, struct pspid, list);
+		if (!container->valid) {
+			pid_next_write = container;
 			return;
 		}
 	}
@@ -88,6 +96,10 @@ void pstrace_add(struct task_struct *p)
 SYSCALL_DEFINE1(pstrace_enable, pid_t, pid)
 {
 	struct list_head *pos;
+	struct pspid *tmp;
+
+	preempt_disable();
+	spin_lock(&pid_list);
 
 	if (pid == -1) {
 		/* trace all processes
@@ -139,12 +151,29 @@ SYSCALL_DEFINE1(pstrace_enable, pid_t, pid)
 	}
 
 return_from_enable:
+	/* debug: print all disabled / enabled pids */
+	if (enabled_all == 0)
+		printk(KERN_DEBUG "pid enabled: ");
+	else
+		printk(KERN_DEBUG "pid disabled: ");
+		
+	list_for_each_entry(tmp, &pid_list_head, list) {
+		printk(KERN_DEBUG "%d ", tmp->pid);
+	}
+	printk(KERN_DEBUG "\n");
+		
+	spin_unlock(&pid_list);
+	preempt_enable();
 	return 0;
 }
 
 SYSCALL_DEFINE1(pstrace_disable, pid_t, pid)
 {
 	struct list_head *pos;
+	struct pspid *tmp;
+
+	preempt_disable();
+	spin_lock(&pid_list);
 
 	if (pid == -1) {
 		/* stop tracing all processes
@@ -197,6 +226,19 @@ SYSCALL_DEFINE1(pstrace_disable, pid_t, pid)
 	}
 
 return_from_disable:
+	/* debug: print all disabled / enabled pids */
+	if (enabled_all == 0)
+		printk(KERN_DEBUG "pid enabled: ");
+	else
+		printk(KERN_DEBUG "pid disabled: ");
+		
+	list_for_each_entry(tmp, &pid_list_head, list) {
+		printk(KERN_DEBUG "%d ", tmp->pid);
+	}
+	printk(KERN_DEBUG "\n");
+		
+	spin_unlock(&pid_list);
+	preempt_enable();
 	return 0;
 }
 
