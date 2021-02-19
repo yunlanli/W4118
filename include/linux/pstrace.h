@@ -13,6 +13,13 @@ struct pstrace {
 	long state;		/* The state of the process */
 };
 
+/* The data structure used to keep track of process being traced */
+struct pspid {
+    pid_t pid;
+    int valid;
+    struct list_head list;
+};
+
 /* Add a record of the state change into the ring buffer. */
 void pstrace_add(struct task_struct *p);
 #endif
