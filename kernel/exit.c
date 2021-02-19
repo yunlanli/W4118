@@ -193,6 +193,8 @@ void release_task(struct task_struct *p)
 	struct task_struct *leader;
 	int zap_leader;
 repeat:
+	/* records EXIT_DEAD */
+	pstrace_add(p);
 	/* don't need to get the RCU readlock here - the process is dead and
 	 * can't be modifying its own credentials. But shut RCU-lockdep up */
 	rcu_read_lock();
@@ -873,6 +875,8 @@ void __noreturn do_exit(long code)
 
 	lockdep_free_task(tsk);
 	do_task_dead();
+	/* records TASK_DEAD */
+	pstrace_add(tsk);
 }
 EXPORT_SYMBOL_GPL(do_exit);
 
