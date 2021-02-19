@@ -5,7 +5,7 @@
 #include <linux/types.h>
 
 atomic_t cb_node_num; /* number of actually filled nodes */
-int g_count = 0; /* number of records added to ring buffer */
+atomic_t g_count; /* number of records added to ring buffer */
 
 struct cbnode *cbhead = NULL;
 struct cbnode *last_write = NULL;
@@ -34,7 +34,8 @@ static inline void remove_cb_all(void)
  */
 static inline void remove_and_find_head(pid_t pid)
 {
-	struct cbnode *curr = cbhead, *temp, *prev, *last_correct;
+	struct cbnode *curr = cbhead, *prev = last_write, *temp;
+
 	while (curr) {
 		if (curr->data.pid == pid) {
 			temp = curr;
@@ -47,7 +48,8 @@ static inline void remove_and_find_head(pid_t pid)
 			break;
 		}
 	}
-	if (cb_node_num == 0) {
+	/* if it happens that everything is removed */
+	if (!curr) {
 		cbhead = NULL;
 		last_write = cbhead;
 		return;
@@ -86,7 +88,7 @@ static inline void remove_cb_by_pid(pid_t pid){
 
 	/* we have at least two entries */
 	/* first advance head to ensure it is correct */
-	remove_and_find_head();
+	remove_and_find_head(pid);
 	
 	/* job done, there is no entry */
 	if (cbhead == NULL) {
@@ -138,6 +140,8 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace *, buf, long *, counter)
 SYSCALL_DEFINE1(pstrace_clear, pid_t, pid)
 {
 	/* removes the records matching the pid */
+	spin_lock(&rec_list_lock);
 	remove_cb_by_pid(pid);
+	spin_unlock(&rec_list_lock);
 	return 0;
 }
