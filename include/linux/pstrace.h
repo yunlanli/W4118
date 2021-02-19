@@ -20,6 +20,11 @@ struct pspid {
     struct list_head list;
 };
 
+struct cbnode {
+	struct pstrace data;
+	struct cbnode *next;
+};
+
 /* Add a record of the state change into the ring buffer. */
 void pstrace_add(struct task_struct *p);
 #endif

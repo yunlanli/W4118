@@ -5,11 +5,18 @@
 #include <linux/spinlock_types.h>
 #include <linux/spinlock.h>
 #include <linux/preempt.h>
+#include <linux/slab.h>
 
+atomic_t cb_node_num; /* number of actually filled nodes */
 int enabled_all = 0; /* flag to indicate if all processes are enabled tracing */
+int g_count = 0; /* number of records added to ring buffer */
+
 struct pspid traced[PSTRACE_BUF_SIZE] = { 
-	[0 ... PSTRACE_BUF_SIZE - 1] = { .valid = 0 } 
+        [0 ... PSTRACE_BUF_SIZE - 1] = { .valid = 0 } 
 };  /* buffer to store traced process pid */
+
+struct cbnode *cbhead = NULL;
+struct cbnode *last_write = NULL;
 
 LIST_HEAD(pid_list_head); /* list head of traced_list */
 DEFINE_SPINLOCK(pid_list); /* spinlock for modifying traced */
@@ -92,7 +99,7 @@ return_from_find_pid_next:
 void pstrace_add(struct task_struct *p)
 {
         pid_t pid;
-        // struct cbnode *ncbnode;
+        struct cbnode *ncbnode;
         pid = p->pid;
         if (pid < 0) /* this pid is invalid */
                 goto end;
@@ -110,6 +117,27 @@ void pstrace_add(struct task_struct *p)
                         goto end;
                 }
         }
+        if (cb_node_num.counter < 500) {
+                ncbnode = kmalloc(sizeof(struct cbnode), GFP_KERNEL);
+                strncpy(ncbnode->data.comm, p->comm, sizeof(p->comm));
+                ncbnode->data.pid = pid;
+                ncbnode->data.state = p->state;
+                atomic_inc(&cb_node_num);
+                g_count++;
+
+                if (!cbhead) {/* the circular buffer is empty*/  
+                        cbhead = ncbnode; /* head always points to the first node*/
+                        ncbnode->next = cbhead;
+                        last_write = ncbnode; 
+                } else {
+                        last_write->next = ncbnode;
+                        last_write = ncbnode;
+                        last_write->next = cbhead;
+                }
+                
+
+        } else
+        	goto end;
 end:
 	;
 }
