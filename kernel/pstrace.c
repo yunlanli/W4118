@@ -29,6 +29,31 @@ static inline void remove_cb_all(void)
 	last_write = cbhead;
 }
 
+/* pre-process the list, which:
+ * - makes sure @cbhead is at the correct position, and does no more.
+ */
+static inline void remove_and_find_head(pid_t pid)
+{
+	struct cbnode *curr = cbhead, *temp, *prev, *last_correct;
+	while (curr) {
+		if (curr->data.pid == pid) {
+			temp = curr;
+			curr = curr->next;
+			kvfree(temp);	
+			prev->next = curr;
+			cbhead = curr;
+			atomic_dec(&cb_node_num);
+		}else {
+			break;
+		}
+	}
+	if (cb_node_num == 0) {
+		cbhead = NULL;
+		last_write = cbhead;
+		return;
+	}
+}
+
 /* removes all the entries in circular buffer that matches @pid and frees it */
 static inline void remove_cb_by_pid(pid_t pid){
 	struct cbnode *curr = cbhead, *temp, *prev, *last_correct;
@@ -51,32 +76,29 @@ static inline void remove_cb_by_pid(pid_t pid){
 
 	/* there is only one entry */
 	if (prev == curr) {
-		kvfree(curr);
-		cbhead = NULL;
-		last_write = cbhead;
+		if (curr->data.pid == pid) {
+			kvfree(curr);
+			cbhead = NULL;
+			last_write = cbhead;
+		}
 		return;
 	}
 
 	/* we have at least two entries */
 	/* first advance head to ensure it is correct */
-	while (curr) {
-		if (curr->data.pid == pid) {
-			temp = curr;
-			curr = curr->next;
-			kvfree(temp);	
-			prev->next = curr;
-			cbhead = curr;
-			atomic_dec(&cb_node_num);
-		}else {
-			break;
-		}
+	remove_and_find_head();
+	
+	/* job done, there is no entry */
+	if (cbhead == NULL) {
+		return;
 	}
-	last_correct = cbhead;
 
+	/* there is at least one entry */
+	last_correct = cbhead;
+	prev = cbhead;
+	curr = cbhead->next;
 	/* to prevent loop */
-	prev = curr;
-	curr = curr->next;
-	while (curr != cbhead) {	
+	while (curr != NULL && curr != cbhead) {	
 		/* if found, free it */
 		if (curr->data.pid == pid) {
 			temp = curr;
@@ -91,8 +113,6 @@ static inline void remove_cb_by_pid(pid_t pid){
 		}
 	}
 	last_write = last_correct;
-	/* cbhead might be removed */
-	cbhead = last_write->next;
 }
 
 void pstrace_add(struct task_struct *p)
