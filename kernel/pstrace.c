@@ -91,6 +91,27 @@ return_from_find_pid_next:
 
 void pstrace_add(struct task_struct *p)
 {
+        pid_t pid;
+        // struct cbnode *ncbnode;
+        pid = p->pid;
+        if (pid < 0) /* this pid is invalid */
+                goto end;
+
+        spin_lock(&pid_list);
+        if (!enabled_all) {
+                if (list_find(&pid_list_head, pid) == NULL) {
+                        spin_unlock(&pid_list);
+                        goto end;   
+                }
+        }
+        else {
+                if (list_find(&pid_list_head, pid) != NULL) {
+                        spin_unlock(&pid_list);
+                        goto end;
+                }
+        }
+end:
+	;
 }
 
 SYSCALL_DEFINE1(pstrace_enable, pid_t, pid)
