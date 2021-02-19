@@ -6,19 +6,15 @@
 
 #define PSTRACE_BUF_SIZE 500	/* The maximum size of the ring buffer */
 
-struct cbnode { /* circular buffer node */
-	struct pstrace {
-		char comm[16];		/* The name of the process */
-		pid_t pid;		/* The pid of the process */
-		long state;		/* The state of the process */
-	} p_info;
-	struct list_head head;
+struct pstrace {
+	char comm[16];		/* The name of the process */
+	pid_t pid;		/* The pid of the process */
+	long state;		/* The state of the process */
 };
 
-struct traced_pid_node{
-	pid_t pid;
-	int valid; /* 0 is invalid and 1 is valid */
-	struct list_head head;
+struct cbnode { /* circular buffer node, singly linked list */
+	struct pstrace data;
+	struct cbnode *next;
 };
 
 /* Add a record of the state change into the ring buffer. */
