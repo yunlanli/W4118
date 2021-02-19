@@ -136,8 +136,16 @@ void pstrace_add(struct task_struct *p)
                 }
                 
 
-        } else
-        	goto end;
+        } else {
+        	/* cb_node_num == 500 */
+                last_write = last_write->next;
+                g_count++;
+                strncpy(last_write->data.comm, p->comm, sizeof(p->comm));
+                last_write->data.pid = pid;
+                last_write->data.state = p->state;
+                cbhead = cbhead->next;	
+        }
+        	
 end:
 	;
 }
