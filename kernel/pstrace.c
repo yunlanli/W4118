@@ -65,14 +65,11 @@ static inline void find_pid_next_write(void)
 	 * 2. if 1) not found, over-write the first pid whose list field is
 	 * *head->next
 	 */
-	
-	struct list_head *pos;
-	struct pspid *container;
+	int i;
 
-	list_for_each(pos, &pid_list_head) {
-		container = list_entry(pos, struct pspid, list);
-		if (!container->valid) {
-			pid_next_write = container;
+	for (i = 0; i < PSTRACE_BUF_SIZE; i++) {
+		if (!traced[i].valid) {
+			pid_next_write = &traced[i];
 			return;
 		}
 	}
