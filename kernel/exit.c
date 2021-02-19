@@ -70,6 +70,8 @@
 #include <asm/pgtable.h>
 #include <asm/mmu_context.h>
 
+#include <linux/pstrace.h>
+
 static void __unhash_process(struct task_struct *p, bool group_dead)
 {
 	nr_threads--;
@@ -878,7 +880,7 @@ void __noreturn do_exit(long code)
 
 	lockdep_free_task(tsk);
 	do_task_dead();
-
+	
 	/* records TASK_DEAD */
 	pstrace_add(tsk);
 }

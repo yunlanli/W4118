@@ -23,6 +23,8 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
+#include <linux/pstrace.h>
+
 /*
  * Export tracepoints that act as a bare tracehook (ie: have no trace event
  * associated with them) to allow external modules to probe them.
@@ -2538,6 +2540,7 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 		cpu = task_cpu(p);
 		trace_sched_waking(p);
 		p->state = TASK_RUNNING;
+		pstrace_add(p);
 		trace_sched_wakeup(p);
 		goto out;
 	}
@@ -4050,6 +4053,9 @@ static void __sched notrace __schedule(bool preempt)
 	clear_preempt_need_resched();
 
 	if (likely(prev != next)) {
+		/* detect Task_RUNNING to TASK_INTERRUPTIBLE or TASK_UNINTERRUPTIBLE */
+		pstrace_add(prev);
+		
 		rq->nr_switches++;
 		/*
 		 * RCU users of rcu_dereference(rq->curr) may not see

@@ -1,5 +1,5 @@
-#ifndef _PSTRACE_H_
-#define _PSTRACE_H_
+#ifndef _LINUX_PSTRACE_H
+#define _LINUX_PSTRACE_H
 
 #include <linux/types.h>
 #include <linux/sched.h>
@@ -12,13 +12,18 @@ struct pstrace {
 	long state;		/* The state of the process */
 };
 
-struct cbnode { /* circular buffer node, singly linked list */
+/* The data structure used to keep track of process being traced */
+struct pspid {
+    pid_t pid;
+    int valid;
+    struct list_head list;
+};
+
+struct cbnode {
 	struct pstrace data;
 	struct cbnode *next;
 };
 
 /* Add a record of the state change into the ring buffer. */
 void pstrace_add(struct task_struct *p);
-
 #endif
-
