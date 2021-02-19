@@ -1,8 +1,8 @@
 #include <linux/pstrace.h>
 #include <linux/syscalls.h>
-#include <linux/list.h>
 #include <asm-generic/atomic-instrumented.h>
 #include <linux/types.h>
+#include <linux/slab.h>
 
 atomic_t cb_node_num; /* number of actually filled nodes */
 atomic_t g_count; /* number of records added to ring buffer */
@@ -22,7 +22,7 @@ static inline void remove_cb_all(void)
 	while (curr) {
 		temp = curr;
 		curr = curr->next;
-		kvfree(temp);
+		kfree(temp);
 		atomic_dec(&cb_node_num);		
 	}
 	cbhead = NULL;
@@ -40,7 +40,7 @@ static inline void remove_and_find_head(pid_t pid)
 		if (curr->data.pid == pid) {
 			temp = curr;
 			curr = curr->next;
-			kvfree(temp);	
+			kfree(temp);	
 			prev->next = curr;
 			cbhead = curr;
 			atomic_dec(&cb_node_num);
@@ -79,7 +79,7 @@ static inline void remove_cb_by_pid(pid_t pid){
 	/* there is only one entry */
 	if (prev == curr) {
 		if (curr->data.pid == pid) {
-			kvfree(curr);
+			kfree(curr);
 			cbhead = NULL;
 			last_write = cbhead;
 		}
@@ -105,7 +105,7 @@ static inline void remove_cb_by_pid(pid_t pid){
 		if (curr->data.pid == pid) {
 			temp = curr;
 			curr = curr->next;
-			kvfree(temp);	
+			kfree(temp);	
 			prev->next = curr;
 			atomic_dec(&cb_node_num);
 		}else{
