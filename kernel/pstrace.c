@@ -10,6 +10,7 @@
 #include <linux/preempt.h>
 #include <linux/slab.h>
 #include <linux/errno.h>
+#include <linux/wait.h>
 
 atomic_t cb_node_num = ATOMIC_INIT(0); /* number of actually filled nodes */
 atomic_long_t g_count = ATOMIC_LONG_INIT(0);/* number of records added to ring buffer */
@@ -25,6 +26,15 @@ struct cbnode *last_write = NULL;
 LIST_HEAD(pid_list_head); /* list head of traced_list */
 DEFINE_SPINLOCK(pid_list); /* spinlock for modifying traced */
 DEFINE_SPINLOCK(rec_list_lock); /* rec_list_lock is used to access: circular_buffer & last_write_ptr */ 
+
+/* 
+ * wait queue:
+ * @rbuf_wait: struct wait_queue_head
+ * @rbuf_wait.head: struct list_head 
+ * @rbuf_wait.lock: spinlock_t
+ */
+DECLARE_WAIT_QUEUE_HEAD(rbuf_wait);
+
 
 static inline void remove_cb_all(void)
 {
@@ -228,6 +238,7 @@ void pstrace_add(struct task_struct *p)
 {
         pid_t pid;
         struct cbnode *ncbnode;
+
         pid = p->pid;
         if (pid < 0) /* this pid is invalid */
                 goto end;
@@ -252,8 +263,6 @@ void pstrace_add(struct task_struct *p)
                 ncbnode->data.pid = pid;
                 ncbnode->data.state = p->state;
                 printk(KERN_DEBUG "comm %s, pid %d, state %ld\n", ncbnode->data.comm, ncbnode->data.pid, ncbnode->data.state);
-                atomic_inc(&cb_node_num);
-                atomic_long_inc(&g_count);
                 spin_lock(&rec_list_lock);
 
                 if (!cbhead) {/* the circular buffer is empty*/  
@@ -266,6 +275,15 @@ void pstrace_add(struct task_struct *p)
                         last_write->next = cbhead;
                 }
                 spin_unlock(&rec_list_lock);
+
+		/* update g_count */
+                atomic_inc(&cb_node_num);
+                atomic_long_inc(&g_count);
+
+		/* wake up all processes on the wait queue */
+		spin_lock(&rbuf_wait.lock);
+		wake_up_interruptible_all(&rbuf_wait);
+		spin_unlock(&rbuf_wait.lock);
         } else {
         	/* cb_node_num == 500 */
         	spin_lock(&rec_list_lock);
