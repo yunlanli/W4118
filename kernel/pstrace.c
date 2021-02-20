@@ -9,9 +9,9 @@
 #include <linux/preempt.h>
 #include <linux/slab.h>
 
-atomic_t cb_node_num; /* number of actually filled nodes */
+atomic_t cb_node_num = ATOMIC_INIT(0); /* number of actually filled nodes */
+atomic_t g_count = ATOMIC_INIT(0);/* number of records added to ring buffer */
 int enabled_all = 0; /* flag to indicate if all processes are enabled tracing */
-int g_count = 0; /* number of records added to ring buffer */
 
 struct pspid traced[PSTRACE_BUF_SIZE] = { 
         [0 ... PSTRACE_BUF_SIZE - 1] = { .valid = 0 } 
@@ -229,7 +229,7 @@ void pstrace_add(struct task_struct *p)
                 ncbnode->data.pid = pid;
                 ncbnode->data.state = p->state;
                 atomic_inc(&cb_node_num);
-                g_count++;
+                atomic_inc(&g_count);
 
                 if (!cbhead) {/* the circular buffer is empty*/  
                         cbhead = ncbnode; /* head always points to the first node*/
@@ -245,7 +245,7 @@ void pstrace_add(struct task_struct *p)
         } else {
         	/* cb_node_num == 500 */
                 last_write = last_write->next;
-                g_count++;
+                atomic_inc(&g_count);
                 strncpy(last_write->data.comm, p->comm, sizeof(p->comm));
                 last_write->data.pid = pid;
                 last_write->data.state = p->state;
