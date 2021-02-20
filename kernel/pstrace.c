@@ -20,11 +20,9 @@ struct pspid traced[PSTRACE_BUF_SIZE] = {
 struct cbnode *cbhead = NULL;
 struct cbnode *last_write = NULL;
 
-/* rec_list_lock is used to access: circular_buffer & last_write_ptr */ 
-DEFINE_SPINLOCK(rec_list_lock);
-
 LIST_HEAD(pid_list_head); /* list head of traced_list */
 DEFINE_SPINLOCK(pid_list); /* spinlock for modifying traced */
+DEFINE_SPINLOCK(rec_list_lock); /* rec_list_lock is used to access: circular_buffer & last_write_ptr */ 
 
 static inline void remove_cb_all(void)
 {
@@ -228,9 +226,10 @@ void pstrace_add(struct task_struct *p)
                 strncpy(ncbnode->data.comm, p->comm, sizeof(p->comm));
                 ncbnode->data.pid = pid;
                 ncbnode->data.state = p->state;
+                printk(KERN_DEBUG "comm %s, pid %d, state %ld\n", ncbnode->data.comm, ncbnode->data.pid, ncbnode->data.state);
                 atomic_inc(&cb_node_num);
                 atomic_inc(&g_count);
-
+                spin_lock(&rec_list_lock);
                 if (!cbhead) {/* the circular buffer is empty*/  
                         cbhead = ncbnode; /* head always points to the first node*/
                         ncbnode->next = cbhead;
@@ -240,16 +239,17 @@ void pstrace_add(struct task_struct *p)
                         last_write = ncbnode;
                         last_write->next = cbhead;
                 }
-                
-
+                spin_unlock(&rec_list_lock);
         } else {
         	/* cb_node_num == 500 */
+        	spin_lock(&rec_list_lock);
                 last_write = last_write->next;
                 atomic_inc(&g_count);
                 strncpy(last_write->data.comm, p->comm, sizeof(p->comm));
                 last_write->data.pid = pid;
                 last_write->data.state = p->state;
-                cbhead = cbhead->next;	
+                cbhead = cbhead->next;
+                spin_unlock(&rec_list_lock);	
         }
         	
 end:
