@@ -40,8 +40,7 @@ static inline void remove_cb_all(void)
 {
 	struct cbnode *curr = cbhead, *temp;
 	
-	last_write->next = NULL;
-	while (curr) {
+	while (curr && cb_node_num.counter) {
 		temp = curr;
 		curr = curr->next;
 		/* freeing */
@@ -234,6 +233,16 @@ return_from_find_pid_next:
 	return next;
 }
 
+static inline void fill_cbnode(struct cbnode *n, struct task_struct *p) {
+	strncpy(n->data.comm, p->comm, sizeof(p->comm));
+	n->data.pid = p->pid;
+	if (p->exit_state == 16 || p->exit_state == 32)
+		n->data.state = p->exit_state;
+	else
+		n->data.state = p->state;
+
+}
+
 void pstrace_add(struct task_struct *p)
 {
         pid_t pid;
@@ -259,9 +268,7 @@ void pstrace_add(struct task_struct *p)
         spin_unlock(&pid_list);
         if (cb_node_num.counter < 500) {
                 ncbnode = kmalloc(sizeof(struct cbnode), GFP_KERNEL);
-                strncpy(ncbnode->data.comm, p->comm, sizeof(p->comm));
-                ncbnode->data.pid = pid;
-                ncbnode->data.state = p->state;
+                fill_cbnode(ncbnode, p);
                 printk(KERN_DEBUG "comm %s, pid %d, state %ld\n", ncbnode->data.comm, ncbnode->data.pid, ncbnode->data.state);
                 spin_lock(&rec_list_lock);
 
@@ -289,9 +296,7 @@ void pstrace_add(struct task_struct *p)
         	spin_lock(&rec_list_lock);
                 last_write = last_write->next;
                 atomic_long_inc(&g_count);
-                strncpy(last_write->data.comm, p->comm, sizeof(p->comm));
-                last_write->data.pid = pid;
-                last_write->data.state = p->state;
+                fill_cbnode(last_write, p);
                 cbhead = cbhead->next;
                 spin_unlock(&rec_list_lock);	
         }
@@ -486,7 +491,7 @@ get_ret2user:
 
 SYSCALL_DEFINE1(pstrace_clear, pid_t, pid)
 {
-	if (pid < 0) {
+	if (pid != -1 && pid < 0) {
 		return -EINVAL;
 	}
 
