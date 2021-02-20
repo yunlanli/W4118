@@ -288,9 +288,7 @@ void pstrace_add(struct task_struct *p)
                 atomic_long_inc(&g_count);
 
 		/* wake up all processes on the wait queue */
-		spin_lock(&rbuf_wait.lock);
 		wake_up_interruptible_all(&rbuf_wait);
-		spin_unlock(&rbuf_wait.lock);
         } else {
         	/* cb_node_num == 500 */
         	spin_lock(&rec_list_lock);
