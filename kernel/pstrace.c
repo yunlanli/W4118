@@ -27,10 +27,17 @@ DEFINE_SPINLOCK(rec_list_lock); /* rec_list_lock is used to access: circular_buf
 static inline void remove_cb_all(void)
 {
 	struct cbnode *curr = cbhead, *temp;
+	
+	last_write->next = NULL;
 	while (curr) {
 		temp = curr;
 		curr = curr->next;
+		/* freeing */
+		spin_unlock(&rec_list_lock);
+		printk(KERN_DEBUG "remove_all freeing: %s\n", temp->data.comm);
 		kfree(temp);
+		spin_lock(&rec_list_lock);
+		/* done freeing */
 		atomic_dec(&cb_node_num);		
 	}
 	cbhead = NULL;
@@ -48,7 +55,12 @@ static inline void remove_and_find_head(pid_t pid)
 		if (curr->data.pid == pid) {
 			temp = curr;
 			curr = curr->next;
+			/* freeing */
+			spin_unlock(&rec_list_lock);
+			printk(KERN_DEBUG "remove_all freeing: %s\n", temp->data.comm);
 			kfree(temp);	
+			spin_lock(&rec_list_lock);
+			/* done freeing */
 			prev->next = curr;
 			cbhead = curr;
 			atomic_dec(&cb_node_num);
@@ -87,7 +99,12 @@ static inline void remove_cb_by_pid(pid_t pid){
 	/* there is only one entry */
 	if (prev == curr) {
 		if (curr->data.pid == pid) {
+			/* freeing */
+			spin_unlock(&rec_list_lock);
+			printk(KERN_DEBUG "remove_all freeing: %s\n", curr->data.comm);
 			kfree(curr);
+			spin_lock(&rec_list_lock);
+			/* done freeing */
 			cbhead = NULL;
 			last_write = cbhead;
 		}
@@ -113,7 +130,12 @@ static inline void remove_cb_by_pid(pid_t pid){
 		if (curr->data.pid == pid) {
 			temp = curr;
 			curr = curr->next;
+			/* freeing */
+			spin_unlock(&rec_list_lock);
+			printk(KERN_DEBUG "remove_all freeing: %s\n", temp->data.comm);
 			kfree(temp);	
+			spin_lock(&rec_list_lock);
+			/* done freeing */
 			prev->next = curr;
 			atomic_dec(&cb_node_num);
 		}else{
@@ -383,6 +405,10 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace *, buf, long *, counter)
 
 SYSCALL_DEFINE1(pstrace_clear, pid_t, pid)
 {
+	if (pid < 0) {
+		return -EINVAL;
+	}
+
 	/* removes the records matching the pid */
 	spin_lock(&rec_list_lock);
 	remove_cb_by_pid(pid);
