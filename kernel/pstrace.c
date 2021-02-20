@@ -30,8 +30,7 @@ static inline void remove_cb_all(void)
 {
 	struct cbnode *curr = cbhead, *temp;
 	
-	last_write->next = NULL;
-	while (curr) {
+	while (curr && cb_node_num.counter) {
 		temp = curr;
 		curr = curr->next;
 		/* freeing */
