@@ -429,7 +429,7 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __us
 	if (copy_from_user(&kcounter, counter, sizeof(long)))
 		return -EFAULT;
 
-	if (counter <= 0) {
+	if (kcounter <= 0) {
 		/* return immediately */
 		spin_lock(&rec_list_lock);
 		/* g_count will not change while we hold the lock, so can assign
