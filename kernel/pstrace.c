@@ -1,6 +1,7 @@
 #include <linux/pstrace.h>
 #include <linux/syscalls.h>
 #include <asm-generic/atomic-instrumented.h>
+#include <asm-generic/atomic-long.h>
 #include <linux/types.h>
 #include <linux/sched.h>
 #include <linux/list.h>
@@ -8,9 +9,10 @@
 #include <linux/spinlock.h>
 #include <linux/preempt.h>
 #include <linux/slab.h>
+#include <linux/errno.h>
 
 atomic_t cb_node_num = ATOMIC_INIT(0); /* number of actually filled nodes */
-atomic_t g_count = ATOMIC_INIT(0);/* number of records added to ring buffer */
+atomic_long_t g_count = ATOMIC_LONG_INIT(0);/* number of records added to ring buffer */
 int enabled_all = 0; /* flag to indicate if all processes are enabled tracing */
 
 struct pspid traced[PSTRACE_BUF_SIZE] = { 
@@ -229,7 +231,7 @@ void pstrace_add(struct task_struct *p)
                 ncbnode->data.pid = pid;
                 ncbnode->data.state = p->state;
                 atomic_inc(&cb_node_num);
-                atomic_inc(&g_count);
+                atomic_long_inc(&g_count);
 
                 if (!cbhead) {/* the circular buffer is empty*/  
                         cbhead = ncbnode; /* head always points to the first node*/
@@ -245,7 +247,7 @@ void pstrace_add(struct task_struct *p)
         } else {
         	/* cb_node_num == 500 */
                 last_write = last_write->next;
-                atomic_inc(&g_count);
+                atomic_long_inc(&g_count);
                 strncpy(last_write->data.comm, p->comm, sizeof(p->comm));
                 last_write->data.pid = pid;
                 last_write->data.state = p->state;
@@ -376,9 +378,68 @@ return_from_disable:
 	return 0;
 }
 
-SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace *, buf, long *, counter)
+
+static inline void copy_pstrace(struct pstrace *dest, struct pstrace *src) {
+	strncpy(dest->comm, src->comm, sizeof(src->comm));
+	dest->pid = src->pid;
+	dest->state = src->state;
+}
+
+SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __user *, counter)
 {
-	return 0;
+	long kcounter;
+	int cp_count;
+	struct pstrace *kbuf;
+	struct cbnode *pos;
+
+	cp_count = 0;
+	kbuf = (struct pstrace *) kmalloc(sizeof(struct pstrace) * PSTRACE_BUF_SIZE, GFP_KERNEL);
+
+	/* invalid pid */
+	if (pid !=  -1 && pid < 0)
+		return -EINVAL;
+
+	if (buf == NULL || counter == NULL)
+		return -EINVAL;
+
+	if (copy_from_user(&kcounter, counter, sizeof(long)))
+		return -EFAULT;
+
+	if (counter <= 0) {
+		/* return immediately */
+		spin_lock(&rec_list_lock);
+		/* g_count will not change while we hold the lock, so can assign
+		 * it to kcounter now
+		 */
+		kcounter = g_count.counter;
+
+		if (cbhead == NULL)
+			goto get_unlock;
+		
+		for (pos = cbhead; pos != cbhead; pos = pos->next) {
+			copy_pstrace(kbuf+cp_count, &pos->data);
+			cp_count++;
+		}
+
+get_unlock:
+		spin_unlock(&rec_list_lock);
+		goto get_ret2user;
+	}
+
+get_ret2user:
+	if (copy_to_user(buf, kbuf, sizeof(struct pstrace) * cp_count)) {
+		kfree(kbuf);
+		return -EFAULT;
+	}
+
+	if (copy_to_user(counter, &kcounter, sizeof(long))) {
+		kfree(kbuf);
+		return -EFAULT;
+	}
+
+	kfree(kbuf);
+
+	return cp_count;
 }
 
 SYSCALL_DEFINE1(pstrace_clear, pid_t, pid)
