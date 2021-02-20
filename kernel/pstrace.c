@@ -467,7 +467,7 @@ get_ret2user:
 
 SYSCALL_DEFINE1(pstrace_clear, pid_t, pid)
 {
-	if (pid < 0) {
+	if (pid != -1 && pid < 0) {
 		return -EINVAL;
 	}
 
