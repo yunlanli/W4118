@@ -245,6 +245,7 @@ void pstrace_add(struct task_struct *p)
                         goto end;
                 }
         }
+        spin_unlock(&pid_list);
         if (cb_node_num.counter < 500) {
                 ncbnode = kmalloc(sizeof(struct cbnode), GFP_KERNEL);
                 strncpy(ncbnode->data.comm, p->comm, sizeof(p->comm));
