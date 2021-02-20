@@ -10,6 +10,7 @@
 #include <linux/preempt.h>
 #include <linux/slab.h>
 #include <linux/errno.h>
+#include <linux/wait.h>
 
 atomic_t cb_node_num = ATOMIC_INIT(0); /* number of actually filled nodes */
 atomic_long_t g_count = ATOMIC_LONG_INIT(0);/* number of records added to ring buffer */
@@ -25,6 +26,7 @@ struct cbnode *last_write = NULL;
 LIST_HEAD(pid_list_head); /* list head of traced_list */
 DEFINE_SPINLOCK(pid_list); /* spinlock for modifying traced */
 DEFINE_SPINLOCK(rec_list_lock); /* rec_list_lock is used to access: circular_buffer & last_write_ptr */ 
+DECLARE_WAIT_QUEUE_HEAD(rbuf_wait);
 
 static inline void remove_cb_all(void)
 {
@@ -408,12 +410,47 @@ static inline void copy_pstrace(struct pstrace *dest, struct pstrace *src) {
 	dest->state = src->state;
 }
 
+static inline int kcopy_pstrace_all(struct pstrace *kbuf, pid_t pi)
+{
+	struct cbnode *pos;
+	int cp_count = 0;
+	int size_count = PSTRACE_BUF_SIZE;
+
+	for (pos = cbhead; pos && size_count; pos = pos->next) {
+		copy_pstrace(kbuf+cp_count, &pos->data);
+		cp_count++;
+		size_count--;
+	}
+
+	return cp_count;
+}
+
+static inline int kcopy_pstrace_all_by_pid(struct pstrace *kbuf, pid_t pid)
+{
+	struct cbnode *pos;
+	int cp_count = 0;
+	int size_count = PSTRACE_BUF_SIZE;
+
+	if (pid == -1) {
+		return kcopy_pstrace_all(kbuf, pid);	
+	}
+
+	for (pos = cbhead; pos && size_count; pos = pos->next) {
+		size_count--;
+		if (pos->data.pid == pid) {
+			copy_pstrace(kbuf+cp_count, &pos->data);
+			cp_count++;
+		}
+	}
+
+	return cp_count;
+}
+
 SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __user *, counter)
 {
 	long kcounter;
 	int cp_count;
 	struct pstrace *kbuf;
-	struct cbnode *pos;
 
 	cp_count = 0;
 	kbuf = (struct pstrace *) kmalloc(sizeof(struct pstrace) * PSTRACE_BUF_SIZE, GFP_KERNEL);
@@ -428,28 +465,39 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __us
 	if (copy_from_user(&kcounter, counter, sizeof(long)))
 		return -EFAULT;
 
-	if (kcounter <= 0) {
-		/* return immediately */
-		spin_lock(&rec_list_lock);
-		/* g_count will not change while we hold the lock, so can assign
-		 * it to kcounter now
-		 */
-		kcounter = g_count.counter;
+	spin_lock(&rec_list_lock);
 
-		if (cbhead == NULL)
-			goto get_unlock;
-		
-		for (pos = cbhead; pos != cbhead; pos = pos->next) {
-			copy_pstrace(kbuf+cp_count, &pos->data);
-			cp_count++;
+	/* might sleep only if kcounter > 0 */
+	if (kcounter > 0) {
+		/* need to check and sleep */
+		DEFINE_WAIT(wait);
+		/* adds customized info to wait_entry */
+		add_wait_queue(&rbuf_wait, &wait);
+		while (kcounter + PSTRACE_BUF_SIZE < g_count.counter) {
+			prepare_to_wait(&rbuf_wait, &wait, TASK_UNINTERRUPTIBLE);
+			/* releases the lock and goes to sleep */
+			spin_unlock(&rec_list_lock);
+			schedule();
+			/* resumes */
+			spin_lock(&rec_list_lock);
 		}
-
-get_unlock:
-		spin_unlock(&rec_list_lock);
-		goto get_ret2user;
+		finish_wait(&rbuf_wait, &wait);
 	}
 
-get_ret2user:
+	/* g_count will not change while we hold the lock, so can assign
+	 * it to kcounter now
+	 */
+	kcounter = g_count.counter;
+
+	if (cbhead == NULL){
+		spin_unlock(&rec_list_lock);
+		goto real_usr_copy_back;
+	}
+	
+	cp_count = kcopy_pstrace_all_by_pid(kbuf, pid);
+	spin_unlock(&rec_list_lock);
+	
+real_usr_copy_back:
 	if (copy_to_user(buf, kbuf, sizeof(struct pstrace) * cp_count)) {
 		kfree(kbuf);
 		return -EFAULT;

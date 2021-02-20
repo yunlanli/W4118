@@ -24,6 +24,11 @@ struct cbnode {
 	struct cbnode *next;
 };
 
+struct psstruct {
+    struct task_struct *tsk;
+    long counter;
+};
+
 /* Add a record of the state change into the ring buffer. */
 void pstrace_add(struct task_struct *p);
 #endif
