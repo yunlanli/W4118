@@ -15,6 +15,7 @@
 atomic_t cb_node_num = ATOMIC_INIT(0); /* number of actually filled nodes */
 atomic_long_t g_count = ATOMIC_LONG_INIT(0);/* number of records added to ring buffer */
 int enabled_all = 0; /* flag to indicate if all processes are enabled tracing */
+pid_t ps_add_owner = 0;
 
 struct pspid traced[PSTRACE_BUF_SIZE] = { 
         [0 ... PSTRACE_BUF_SIZE - 1] = { .valid = 0 } 
@@ -216,11 +217,25 @@ void pstrace_add(struct task_struct *p)
         }
         spin_unlock(&pid_list);
 
-	spin_lock_irq(&rec_list_lock);
+        if (spin_is_locked(&rec_list_lock) != 0) { /*lock is currently unavailable*/
+        	if (pid == ps_add_owner)
+        		goto end;
+       	}
+
         if (cb_node_num.counter < 500) {
                 ncbnode = kmalloc(sizeof(struct cbnode), GFP_KERNEL);
                 fill_cbnode(ncbnode, p);
                 printk(KERN_DEBUG "comm %s, pid %d, state %ld, rec_no: %ld\n", ncbnode->data.comm, ncbnode->data.pid, ncbnode->data.state, ncbnode->counter);
+                
+		/* Two cases, we both want to acquire the lock
+		 * 1. lock is available
+		 * 2. lock is not available && process doesn't hold the lock,
+		 * spin
+		 *
+		 * We put it here because this MUST come after kmalloc!!
+		 */
+                spin_lock_irq(&rec_list_lock);
+                ps_add_owner = pid; /* declare ownership */
 
                 if (!cbhead) {/* the circular buffer is empty*/  
                         cbhead = ncbnode; /* head always points to the first node*/
@@ -232,16 +247,25 @@ void pstrace_add(struct task_struct *p)
                         last_write->next = cbhead;
                 }
 
-		/* update g_count */
+                /* update g_count */
                 atomic_inc(&cb_node_num);
                 atomic_long_inc(&g_count);
+
         } else {
         	/* cb_node_num == 500 */
+
+		/* same as above */
+        	spin_lock_irq(&rec_list_lock);
+        	ps_add_owner = pid;
+
                 last_write = last_write->next;
                 atomic_long_inc(&g_count);
                 fill_cbnode(last_write, p);
                 cbhead = cbhead->next;
         }
+
+	/* we want to hold the lock while waking up processes,
+	 * DON'T release the lock */
 
 	/* have added record to buffer, updated g_count,
 	 * wants to wake up relevant tasks if exist
@@ -262,8 +286,11 @@ void pstrace_add(struct task_struct *p)
 	}
 	spin_unlock_irq(&rbuf_wait.lock);
 
+	/* Have put all relevant sleeping processes to the run queue,
+	 * release lock for ring buffer
+	 */
 	spin_unlock_irq(&rec_list_lock);
-        	
+
 end:
 	;
 }
@@ -542,11 +569,44 @@ real_usr_copy_back:
 	return cp_count;
 }
 
+
+static inline void wake_up_by_condition(pid_t pid, int condition)
+{
+	struct wait_queue_entry *p, *next;
+	struct psstruct *tmp;
+
+	list_for_each_entry_safe(p, next, &rbuf_wait.head, entry){
+		tmp = (struct psstruct *) p->private;
+		if( condition || tmp->wait_pid == pid ){
+			list_del(&p->entry);
+			/* this will not be recursive */
+			wake_up_process(tmp->tsk);
+		}
+	}
+}
+
+static inline void wake_up_by_pid(pid_t pid)
+{
+	if(pid == -1){
+		/* wakes up all */
+		wake_up_by_condition(pid, 1);
+	}else{
+		/* wakes up only if same pid */
+		wake_up_by_condition(pid, 0);
+	}
+}
+
 SYSCALL_DEFINE1(pstrace_clear, pid_t, pid)
 {
 	if (pid != -1 && pid < 0) {
 		return -EINVAL;
 	}
+
+	/* wakes stuff up */
+	/* grabs the lock */
+	spin_lock_irq(&rbuf_wait.lock);
+	wake_up_by_pid(pid);
+	spin_unlock_irq(&rbuf_wait.lock);
 
 	/* removes the records matching the pid */
 	spin_lock_irq(&rec_list_lock);
