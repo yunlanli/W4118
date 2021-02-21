@@ -25,6 +25,12 @@ struct cbnode {
 	long counter;
 };
 
+struct psstruct {
+	struct task_struct *tsk;
+	long counter;
+	pid_t wait_pid; /* which pid to wait */
+};
+
 /* Add a record of the state change into the ring buffer. */
 void pstrace_add(struct task_struct *p);
 #endif

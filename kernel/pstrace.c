@@ -446,6 +446,7 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __us
 	long kcounter;
 	int cp_count;
 	struct pstrace *kbuf;
+	struct psstruct wait_data;
 	DEFINE_WAIT(wait);
 
 	cp_count = 0;
@@ -466,8 +467,13 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __us
 	/* might sleep only if kcounter > 0 */
 	if (kcounter > 0) {
 		printk(KERN_DEBUG "Enter kcounter > 0 if block...\n");
-		/* need to check and sleep */
+		
 		/* adds customized info to wait_entry */
+		wait_data.tsk = current;
+		wait_data.counter = kcounter;
+		wait.private = &wait_data;
+		
+		/* need to check and sleep */
 		add_wait_queue(&rbuf_wait, &wait);
 		while (kcounter + PSTRACE_BUF_SIZE >= g_count.counter) {
 			prepare_to_wait(&rbuf_wait, &wait, TASK_INTERRUPTIBLE);
@@ -511,11 +517,44 @@ real_usr_copy_back:
 	return cp_count;
 }
 
+
+static inline void wake_up_by_condition(pid_t pid, int condition)
+{
+	struct wait_queue_entry *p, *next;
+	struct psstruct *tmp;
+
+	list_for_each_entry_safe(p, next, &rbuf_wait.head, entry){
+		tmp = (struct psstruct *) p->private;
+		if( condition || tmp->wait_pid == pid ){
+			list_del(&p->entry);
+			wake_up_process(tmp->tsk);
+		}
+	}
+}
+
+static inline void wake_up_by_pid(pid_t pid)
+{
+
+	if(pid == -1){
+		/* wakes up all */
+		wake_up_by_condition(pid, 1);
+	}else{
+		/* wakes up only if same pid */
+		wake_up_by_condition(pid, 0);
+	}
+}
+
 SYSCALL_DEFINE1(pstrace_clear, pid_t, pid)
 {
 	if (pid != -1 && pid < 0) {
 		return -EINVAL;
 	}
+
+	/* wakes stuff up */
+	/* grabs the lock */
+	spin_lock_irq(&rbuf_wait.lock);
+	wake_up_by_pid(pid);
+	spin_unlock_irq(&rbuf_wait.lock);
 
 	/* removes the records matching the pid */
 	spin_lock(&rec_list_lock);
