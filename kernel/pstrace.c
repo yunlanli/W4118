@@ -61,11 +61,14 @@ static inline void remove_cb_all(void)
  */
 static inline void remove_and_find_head(pid_t pid)
 {
-	struct cbnode *curr = cbhead, *prev = last_write, *temp;
+	struct cbnode *curr = cbhead, *prev, *temp;
+	struct cbnode sentinel;
 
 	/* loop prevention */
-	last_write->next = NULL;
-	while (curr) {
+	last_write->next = &sentinel;
+	sentinel.next = cbhead;
+	prev = &sentinel;
+	while (curr != &sentinel) {
 		if (curr->data.pid == pid) {
 			temp = curr;
 			curr = curr->next;
@@ -83,7 +86,7 @@ static inline void remove_and_find_head(pid_t pid)
 		}
 	}
 	/* if it happens that everything is removed */
-	if (!curr) {
+	if (curr == &sentinel) {
 		cbhead = NULL;
 		last_write = cbhead;
 	}else{
@@ -112,6 +115,7 @@ static inline void remove_only_cb_by_pid(pid_t pid)
 /* removes all the entries in circular buffer that matches @pid and frees it */
 static inline void remove_cb_by_pid(pid_t pid){
 	struct cbnode *curr = cbhead, *temp, *prev, *last_correct;
+	struct cbnode sentinel;
 
 	/* do nothing when empty list */
 	if (!curr) {
@@ -130,7 +134,7 @@ static inline void remove_cb_by_pid(pid_t pid){
 	prev = last_write; /* tail of list */
 
 	/* there is only one entry */
-	if (prev == curr) {
+	if (last_write == cbhead) {
 		remove_only_cb_by_pid(pid);
 		return;
 	}
@@ -149,14 +153,14 @@ static inline void remove_cb_by_pid(pid_t pid){
 		remove_only_cb_by_pid(pid);
 		return;
 	}
+
 	/* there is at least two entries, so I need to do rewiring */
-	/* head now is guaranteed to be correct, so start from cbhead->next */
-	last_correct = cbhead;
-	prev = cbhead;
-	curr = cbhead->next;
-	/* to prevent loop */
-	last_write->next = NULL;
-	while (curr) {	
+	curr = cbhead;
+	/* loop prevention */
+	last_write->next = &sentinel;
+	sentinel.next = cbhead;
+	prev = &sentinel;
+	while (curr != &sentinel) {	
 		/* if found, free it */
 		if (curr->data.pid == pid) {
 			temp = curr;
