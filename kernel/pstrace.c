@@ -35,7 +35,6 @@ DEFINE_SPINLOCK(rec_list_lock); /* rec_list_lock is used to access: circular_buf
  */
 DECLARE_WAIT_QUEUE_HEAD(rbuf_wait);
 
-
 static inline void remove_cb_all(void)
 {
 	struct cbnode *curr = cbhead, *temp;
@@ -56,67 +55,12 @@ static inline void remove_cb_all(void)
 	last_write = cbhead;
 }
 
-/* pre-process the list, which:
- * - makes sure @cbhead is at the correct position, and does no more.
- */
-static inline void remove_and_find_head(pid_t pid)
-{
-	struct cbnode *curr = cbhead, *prev, *temp;
-	struct cbnode sentinel;
-
-	/* loop prevention */
-	last_write->next = &sentinel;
-	sentinel.next = cbhead;
-	prev = &sentinel;
-	while (curr != &sentinel) {
-		if (curr->data.pid == pid) {
-			temp = curr;
-			curr = curr->next;
-			/* freeing */
-			spin_unlock(&rec_list_lock);
-			printk(KERN_DEBUG "remove_and_find freeing: %s\n", temp->data.comm);
-			kfree(temp);	
-			spin_lock(&rec_list_lock);
-			/* done freeing */
-			prev->next = curr;
-			cbhead = curr;
-			atomic_dec(&cb_node_num);
-		}else {
-			break;
-		}
-	}
-	/* if it happens that everything is removed */
-	if (curr == &sentinel) {
-		cbhead = NULL;
-		last_write = cbhead;
-	}else{
-		/* restore the link */
-		last_write->next = cbhead;
-	}
-}
-
-/* only used for the case that there is EXACTLY one record in cb_buffer */
-static inline void remove_only_cb_by_pid(pid_t pid)
-{
-	struct cbnode *curr = cbhead;
-
-	if (curr->data.pid == pid) {
-		/* freeing */
-		spin_unlock(&rec_list_lock);
-		printk(KERN_DEBUG "remove_by_pid_1 freeing: %s\n", curr->data.comm);
-		kfree(curr);
-		spin_lock(&rec_list_lock);
-		/* done freeing */
-		cbhead = NULL;
-		last_write = cbhead;
-	}
-}
-
 /* removes all the entries in circular buffer that matches @pid and frees it */
 static inline void remove_cb_by_pid(pid_t pid){
-	struct cbnode *curr = cbhead, *temp, *prev, *last_correct;
+	struct cbnode *curr, *temp, *prev, *last_correct;
 	struct cbnode sentinel;
 
+	curr = cbhead;
 	/* do nothing when empty list */
 	if (!curr) {
 		return;
@@ -128,34 +72,7 @@ static inline void remove_cb_by_pid(pid_t pid){
 		return;	
 	}
 
-	/* traverse and remove the matching records, and 
-	 * update last_write to the correct position last_correct */
-	last_correct = cbhead; /* last correct value in list */
-	prev = last_write; /* tail of list */
-
-	/* there is only one entry */
-	if (last_write == cbhead) {
-		remove_only_cb_by_pid(pid);
-		return;
-	}
-
-	/* we have at least two entries */
-	/* first advance head to ensure it is correct */
-	remove_and_find_head(pid);
-	
-	/* job done, there is no entry */
-	if (cbhead == NULL) {
-		return;
-	}
-
-	/* there is at least one entry */
-	if (prev == curr) {
-		remove_only_cb_by_pid(pid);
-		return;
-	}
-
-	/* there is at least two entries, so I need to do rewiring */
-	curr = cbhead;
+	last_correct = cbhead;
 	/* loop prevention */
 	last_write->next = &sentinel;
 	sentinel.next = cbhead;
