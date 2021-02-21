@@ -38,9 +38,12 @@ DECLARE_WAIT_QUEUE_HEAD(rbuf_wait);
 static inline void remove_cb_all(void)
 {
 	struct cbnode *curr = cbhead, *temp;
-	
-	last_write->next = NULL;
-	while (curr) {
+	struct cbnode sentinel;
+
+	/* loop prevention */
+	last_write->next = &sentinel;
+	sentinel.next = cbhead;
+	while (curr != &sentinel) {
 		temp = curr;
 		curr = curr->next;
 		/* freeing */
