@@ -266,6 +266,7 @@ static inline void fill_cbnode(struct cbnode *n, struct task_struct *p) {
 		n->data.state = p->exit_state;
 	else
 		n->data.state = p->state;
+	n->counter = g_count.counter + 1;
 
 }
 
@@ -312,9 +313,6 @@ void pstrace_add(struct task_struct *p)
 		/* update g_count */
                 atomic_inc(&cb_node_num);
                 atomic_long_inc(&g_count);
-
-		/* wake up all processes on the wait queue */
-		wake_up_interruptible_all(&rbuf_wait);
         } else {
         	/* cb_node_num == 500 */
         	spin_lock(&rec_list_lock);
@@ -324,6 +322,9 @@ void pstrace_add(struct task_struct *p)
                 cbhead = cbhead->next;
                 spin_unlock(&rec_list_lock);	
         }
+
+	/* wake up all processes on the wait queue */
+	wake_up_interruptible_all(&rbuf_wait);
         	
 end:
 	;
@@ -456,7 +457,7 @@ static inline void copy_pstrace(struct pstrace *dest, struct pstrace *src) {
 	dest->state = src->state;
 }
 
-static inline int kcopy_pstrace_all(struct pstrace *kbuf, pid_t pi)
+static inline int kcopy_pstrace_all(struct pstrace *kbuf, long kcounter)
 {
 	struct cbnode *pos;
 	int cp_count = 0;
@@ -464,8 +465,10 @@ static inline int kcopy_pstrace_all(struct pstrace *kbuf, pid_t pi)
 	/* prevent loop around */
 	last_write->next = NULL;
 	for (pos = cbhead; pos; pos = pos->next) {
-		copy_pstrace(kbuf+cp_count, &pos->data);
-		cp_count++;
+		if (pos->counter > kcounter && pos->counter <= kcounter + 500) {
+			copy_pstrace(kbuf+cp_count, &pos->data);
+			cp_count++;
+		}
 	}
 	/* restore it */
 	last_write->next = cbhead;
@@ -473,21 +476,25 @@ static inline int kcopy_pstrace_all(struct pstrace *kbuf, pid_t pi)
 	return cp_count;
 }
 
-static inline int kcopy_pstrace_all_by_pid(struct pstrace *kbuf, pid_t pid)
+static inline int kcopy_pstrace_all_by_pid(struct pstrace *kbuf, pid_t pid, long kcounter)
 {
 	struct cbnode *pos;
 	int cp_count = 0;
 	int size_count = PSTRACE_BUF_SIZE;
 
 	if (pid == -1) {
-		return kcopy_pstrace_all(kbuf, pid);	
+		return kcopy_pstrace_all(kbuf, kcounter);	
 	}
 
 	/* prevent loop around */
 	last_write->next = NULL;
 	for (pos = cbhead; pos; pos = pos->next) {
 		size_count--;
-		if (pos->data.pid == pid) {
+		/* only copy records of pid and have counter val
+		 * kcounter+1 ~ kcounter+500
+		 */
+		if (pos->data.pid == pid && pos->counter > kcounter
+				&& pos->counter <= kcounter + 500) {
 			copy_pstrace(kbuf+cp_count, &pos->data);
 			cp_count++;
 		}
@@ -546,7 +553,7 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __us
 		goto real_usr_copy_back;
 	}
 	
-	cp_count = kcopy_pstrace_all_by_pid(kbuf, pid);
+	cp_count = kcopy_pstrace_all_by_pid(kbuf, pid, kcounter);
 	spin_unlock(&rec_list_lock);
 	
 real_usr_copy_back:
