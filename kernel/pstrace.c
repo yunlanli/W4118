@@ -381,11 +381,13 @@ static inline int kcopy_pstrace_all(struct pstrace *kbuf, long kcounter)
 {
 	struct cbnode *pos;
 	int cp_count = 0;
+	printk(KERN_DEBUG "entering kcopy_all\n");
 
 	/* prevent loop around */
 	last_write->next = NULL;
 	for (pos = cbhead; pos; pos = pos->next) {
 		if (pos->counter > kcounter && pos->counter <= kcounter + 500) {
+			printk(KERN_DEBUG "copying pid=%d\n", pos->data.pid);
 			copy_pstrace(kbuf+cp_count, &pos->data);
 			cp_count++;
 		}
@@ -406,6 +408,7 @@ static inline int kcopy_pstrace_all_by_pid(struct pstrace *kbuf, pid_t pid, long
 		return kcopy_pstrace_all(kbuf, kcounter);	
 	}
 
+	printk(KERN_DEBUG "entering kcopy_all_by_pid\n");
 	/* prevent loop around */
 	last_write->next = NULL;
 	for (pos = cbhead; pos; pos = pos->next) {
@@ -415,6 +418,7 @@ static inline int kcopy_pstrace_all_by_pid(struct pstrace *kbuf, pid_t pid, long
 		 */
 		if (pos->data.pid == pid && pos->counter > kcounter
 				&& pos->counter <= kcounter + 500) {
+			printk(KERN_DEBUG "copying pid=%d\n", pos->data.pid);
 			copy_pstrace(kbuf+cp_count, &pos->data);
 			cp_count++;
 		}
@@ -430,6 +434,7 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __us
 	long kcounter;
 	int cp_count;
 	struct pstrace *kbuf;
+	DEFINE_WAIT(wait);
 
 	cp_count = 0;
 	kbuf = (struct pstrace *) kmalloc(sizeof(struct pstrace) * PSTRACE_BUF_SIZE, GFP_KERNEL);
@@ -443,21 +448,23 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __us
 
 	if (copy_from_user(&kcounter, counter, sizeof(long)))
 		return -EFAULT;
-
+	
+	printk(KERN_DEBUG "entered get with kcounter: %ld, g_count.counter: %lld\n", kcounter, g_count.counter);
 	spin_lock(&rec_list_lock);
 
 	/* might sleep only if kcounter > 0 */
 	if (kcounter > 0) {
 		/* need to check and sleep */
-		DEFINE_WAIT(wait);
 		/* adds customized info to wait_entry */
 		add_wait_queue(&rbuf_wait, &wait);
-		while (kcounter + PSTRACE_BUF_SIZE < g_count.counter) {
+		while (kcounter + PSTRACE_BUF_SIZE >= g_count.counter) {
 			prepare_to_wait(&rbuf_wait, &wait, TASK_INTERRUPTIBLE);
 			/* releases the lock and goes to sleep */
 			spin_unlock(&rec_list_lock);
+			printk(KERN_DEBUG "going sleep with: %ld >= %lld\n", kcounter + PSTRACE_BUF_SIZE, g_count.counter);
 			schedule();
 			/* resumes */
+			printk(KERN_DEBUG "woke up with: %ld >= %lld\n", kcounter + PSTRACE_BUF_SIZE, g_count.counter);
 			spin_lock(&rec_list_lock);
 		}
 		finish_wait(&rbuf_wait, &wait);
@@ -473,6 +480,7 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __us
 		goto real_usr_copy_back;
 	}
 	
+	printk(KERN_DEBUG "going to kcopy\n");
 	cp_count = kcopy_pstrace_all_by_pid(kbuf, pid, kcounter);
 	spin_unlock(&rec_list_lock);
 	
