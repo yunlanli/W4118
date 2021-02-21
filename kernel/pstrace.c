@@ -15,6 +15,7 @@
 atomic_t cb_node_num = ATOMIC_INIT(0); /* number of actually filled nodes */
 atomic_long_t g_count = ATOMIC_LONG_INIT(0);/* number of records added to ring buffer */
 int enabled_all = 0; /* flag to indicate if all processes are enabled tracing */
+pid_t ps_add_owner = 0;
 
 struct pspid traced[PSTRACE_BUF_SIZE] = { 
         [0 ... PSTRACE_BUF_SIZE - 1] = { .valid = 0 } 
@@ -213,12 +214,18 @@ void pstrace_add(struct task_struct *p)
                 }
         }
         spin_unlock(&pid_list);
+        if (spin_is_locked(&rec_list_lock) != 0) { /*lock is currently unavailable*/
+        	if (pid == ps_add_owner)
+        		goto end;
+       	}
+
         if (cb_node_num.counter < 500) {
                 ncbnode = kmalloc(sizeof(struct cbnode), GFP_KERNEL);
                 fill_cbnode(ncbnode, p);
                 printk(KERN_DEBUG "comm %s, pid %d, state %ld, rec_no: %ld\n", ncbnode->data.comm, ncbnode->data.pid, ncbnode->data.state, ncbnode->counter);
-                spin_lock(&rec_list_lock);
-
+                
+                spin_lock_irq(&rec_list_lock);
+                ps_add_owner = pid;
                 if (!cbhead) {/* the circular buffer is empty*/  
                         cbhead = ncbnode; /* head always points to the first node*/
                         ncbnode->next = cbhead;
@@ -228,23 +235,24 @@ void pstrace_add(struct task_struct *p)
                         last_write = ncbnode;
                         last_write->next = cbhead;
                 }
-                spin_unlock(&rec_list_lock);
-
-		/* update g_count */
+                /* update g_count */
                 atomic_inc(&cb_node_num);
                 atomic_long_inc(&g_count);
+
+                spin_unlock_irq(&rec_list_lock);
         } else {
         	/* cb_node_num == 500 */
-        	spin_lock(&rec_list_lock);
+        	spin_lock_irq(&rec_list_lock);
+        	ps_add_owner = pid;
                 last_write = last_write->next;
                 atomic_long_inc(&g_count);
                 fill_cbnode(last_write, p);
                 cbhead = cbhead->next;
-                spin_unlock(&rec_list_lock);	
+                spin_unlock_irq(&rec_list_lock);	
         }
 
 	/* wake up all processes on the wait queue */
-	wake_up_interruptible_all(&rbuf_wait);
+	// wake_up_interruptible_all(&rbuf_wait);
         	
 end:
 	;
