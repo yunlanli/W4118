@@ -22,6 +22,7 @@ struct pspid {
 struct cbnode {
 	struct pstrace data;
 	struct cbnode *next;
+	long counter;
 };
 
 /* Add a record of the state change into the ring buffer. */
