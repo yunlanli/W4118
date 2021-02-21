@@ -2620,6 +2620,7 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 	smp_cond_load_acquire(&p->on_cpu, !VAL);
 
 	p->sched_contributes_to_load = !!task_contributes_to_load(p);
+	pstrace_add(p);
 	p->state = TASK_WAKING;
 
 	if (p->in_iowait) {
@@ -2644,7 +2645,6 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 #endif /* CONFIG_SMP */
 
 	ttwu_queue(p, cpu, wake_flags);
-	pstrace_add(p);
 unlock:
 	raw_spin_unlock_irqrestore(&p->pi_lock, flags);
 out:
