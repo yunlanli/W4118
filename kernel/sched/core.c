@@ -4053,10 +4053,15 @@ static void __sched notrace __schedule(bool preempt)
 	clear_tsk_need_resched(prev);
 	clear_preempt_need_resched();
 
+	/* 
+	 * detect Task_RUNNING to TASK_INTERRUPTIBLE or TASK_UNINTERRUPTIBLE
+	 * prev == next doesn't mean prev didn't change state to
+	 * TASK_UNINTERRUPTIBLE or TASK_INTERRUPTIBLE
+	 * because it might be the only process on the run queue
+	 */
+	pstrace_add(prev);
+
 	if (likely(prev != next)) {
-		/* detect Task_RUNNING to TASK_INTERRUPTIBLE or TASK_UNINTERRUPTIBLE */
-		pstrace_add(prev);
-		
 		rq->nr_switches++;
 		/*
 		 * RCU users of rcu_dereference(rq->curr) may not see
