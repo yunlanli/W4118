@@ -47,10 +47,10 @@ static inline void remove_cb_all(void)
 		temp = curr;
 		curr = curr->next;
 		/* freeing */
-		spin_unlock(&rec_list_lock);
+		spin_unlock_irq(&rec_list_lock);
 		printk(KERN_DEBUG "remove_all freeing: %s\n", temp->data.comm);
 		kfree(temp);
-		spin_lock(&rec_list_lock);
+		spin_lock_irq(&rec_list_lock);
 		/* done freeing */
 		atomic_dec(&cb_node_num);		
 	}
@@ -86,10 +86,10 @@ static inline void remove_cb_by_pid(pid_t pid){
 			temp = curr;
 			curr = curr->next;
 			/* freeing */
-			spin_unlock(&rec_list_lock);
+			spin_unlock_irq(&rec_list_lock);
 			printk(KERN_DEBUG "remove_by_pid freeing: %s\n", temp->data.comm);
 			kfree(temp);	
-			spin_lock(&rec_list_lock);
+			spin_lock_irq(&rec_list_lock);
 			/* done freeing */
 			prev->next = curr;
 			atomic_dec(&cb_node_num);
@@ -194,6 +194,8 @@ void pstrace_add(struct task_struct *p)
 {
         pid_t pid;
         struct cbnode *ncbnode;
+	struct psstruct *wq_private;
+	struct wait_queue_entry *pos, *n;
 
         pid = p->pid;
         if (pid < 0) /* this pid is invalid */
@@ -213,11 +215,12 @@ void pstrace_add(struct task_struct *p)
                 }
         }
         spin_unlock(&pid_list);
+
+	spin_lock_irq(&rec_list_lock);
         if (cb_node_num.counter < 500) {
                 ncbnode = kmalloc(sizeof(struct cbnode), GFP_KERNEL);
                 fill_cbnode(ncbnode, p);
                 printk(KERN_DEBUG "comm %s, pid %d, state %ld, rec_no: %ld\n", ncbnode->data.comm, ncbnode->data.pid, ncbnode->data.state, ncbnode->counter);
-                spin_lock(&rec_list_lock);
 
                 if (!cbhead) {/* the circular buffer is empty*/  
                         cbhead = ncbnode; /* head always points to the first node*/
@@ -228,23 +231,38 @@ void pstrace_add(struct task_struct *p)
                         last_write = ncbnode;
                         last_write->next = cbhead;
                 }
-                spin_unlock(&rec_list_lock);
 
 		/* update g_count */
                 atomic_inc(&cb_node_num);
                 atomic_long_inc(&g_count);
         } else {
         	/* cb_node_num == 500 */
-        	spin_lock(&rec_list_lock);
                 last_write = last_write->next;
                 atomic_long_inc(&g_count);
                 fill_cbnode(last_write, p);
                 cbhead = cbhead->next;
-                spin_unlock(&rec_list_lock);	
         }
 
-	/* wake up all processes on the wait queue */
-	wake_up_interruptible_all(&rbuf_wait);
+	/* have added record to buffer, updated g_count,
+	 * wants to wake up relevant tasks if exist
+	 *
+	 * It's fine calling wake_up_process while holding the run queue lock
+	 * because the process that's get woken up is another process (since
+	 * it's not running but sleeping.
+	 */
+	spin_lock_irq(&rbuf_wait.lock);
+	list_for_each_entry_safe(pos, n, &rbuf_wait.head, entry) {
+		wq_private = (struct psstruct *) pos->private;
+		if (wq_private->counter == g_count.counter) {
+			/* remove from wait queue */
+			__list_del(pos->entry.prev, pos->entry.next);
+			/* @counter+500 is reached, wake up! */
+			wake_up_process(wq_private->tsk);
+		}
+	}
+	spin_unlock_irq(&rbuf_wait.lock);
+
+	spin_unlock_irq(&rec_list_lock);
         	
 end:
 	;
@@ -377,7 +395,7 @@ static inline void copy_pstrace(struct pstrace *dest, struct pstrace *src) {
 	dest->state = src->state;
 }
 
-static inline int kcopy_pstrace_all(struct pstrace *kbuf, long kcounter)
+static inline int kcopy_pstrace_all(struct pstrace *kbuf, long *kcounter)
 {
 	struct cbnode *pos;
 	int kcnt, cp_count = 0;
@@ -389,12 +407,13 @@ static inline int kcopy_pstrace_all(struct pstrace *kbuf, long kcounter)
 		printk(KERN_DEBUG "[%s] check pid=%d, counter=%ld, state: %ld\n\n", 
 				pos->data.comm, pos->data.pid, pos->counter, pos->data.state);
 
-		kcnt = kcounter == -1 || (pos->counter > kcounter && pos->counter <= kcounter + 500);
+		kcnt = *kcounter == -1 || (pos->counter > *kcounter && pos->counter <= *kcounter + 500);
 
 		if (kcnt) {
 			printk(KERN_DEBUG "copying pid=%d\n", pos->data.pid);
 			copy_pstrace(kbuf+cp_count, &pos->data);
 			cp_count++;
+			*kcounter = pos->counter;
 		}
 	}
 	/* restore it */
@@ -403,7 +422,7 @@ static inline int kcopy_pstrace_all(struct pstrace *kbuf, long kcounter)
 	return cp_count;
 }
 
-static inline int kcopy_pstrace_all_by_pid(struct pstrace *kbuf, pid_t pid, long kcounter)
+static inline int kcopy_pstrace_all_by_pid(struct pstrace *kbuf, pid_t pid, long *kcounter)
 {
 	struct cbnode *pos;
 	int kcnt, cp_count = 0;
@@ -413,7 +432,7 @@ static inline int kcopy_pstrace_all_by_pid(struct pstrace *kbuf, pid_t pid, long
 	}
 
 	printk(KERN_DEBUG "entering kcopy_all_by_pid\n");
-	printk(KERN_DEBUG "[param] pid: %d, counter: %ld\n", pid, kcounter);
+	printk(KERN_DEBUG "[param] pid: %d, counter: %ld\n", pid, *kcounter);
 
 	/* prevent loop around */
 	last_write->next = NULL;
@@ -421,18 +440,19 @@ static inline int kcopy_pstrace_all_by_pid(struct pstrace *kbuf, pid_t pid, long
 		printk(KERN_DEBUG "[%s] check pid=%d, counter=%ld, state: %ld\n\n", 
 				pos->data.comm, pos->data.pid, pos->counter, pos->data.state);
 		/* only copy records of pid and have counter val
-		 * kcounter+1 ~ kcounter+500
+		 * *kcounter+1 ~ *kcounter+500
 		 */
 		printk(KERN_DEBUG "cond 1: %d, cond 2: %d, cond 3: %d\n", 
-				pos->data.pid == pid, pos->counter > kcounter, pos->counter <= kcounter + 500);
+				pos->data.pid == pid, pos->counter > *kcounter, pos->counter <= *kcounter + 500);
 		
 		/* condition 2 to check if a record should be copied to user */
-		kcnt = kcounter == -1 || (pos->counter > kcounter && pos->counter <= kcounter + 500);
+		kcnt = *kcounter == -1 || (pos->counter > *kcounter && pos->counter <= *kcounter + 500);
 
 		if (pos->data.pid == pid && kcnt) {
 			printk(KERN_DEBUG "copying pid=%d\n", pos->data.pid);
 			copy_pstrace(kbuf+cp_count, &pos->data);
 			cp_count++;
+			*kcounter = pos->counter;
 		}
 	}
 	/* restore it */
@@ -446,6 +466,7 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __us
 	long kcounter;
 	int cp_count;
 	struct pstrace *kbuf;
+	struct psstruct cur_ps;
 	DEFINE_WAIT(wait);
 
 	cp_count = 0;
@@ -463,23 +484,35 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __us
 	
 	printk(KERN_DEBUG "entered get with kcounter: %ld, g_count.counter: %lld\n", kcounter, g_count.counter);
 
+	/* initialize wait queue entry's private field */
+	cur_ps.wait_pid = pid;
+	cur_ps.tsk = current;
+	cur_ps.counter = kcounter + PSTRACE_BUF_SIZE;
+
+	wait.private = &cur_ps;
+
 	/* might sleep only if kcounter > 0 */
 	if (kcounter > 0) {
 		printk(KERN_DEBUG "Enter kcounter > 0 if block...\n");
-		/* need to check and sleep */
-		/* adds customized info to wait_entry */
-		add_wait_queue(&rbuf_wait, &wait);
-		while (kcounter + PSTRACE_BUF_SIZE >= g_count.counter) {
-			prepare_to_wait(&rbuf_wait, &wait, TASK_INTERRUPTIBLE);
 
-			printk(KERN_DEBUG "going sleep with: %ld >= %lld\n", kcounter + PSTRACE_BUF_SIZE, g_count.counter);
+		if (kcounter + PSTRACE_BUF_SIZE > g_count.counter) {
+			printk(KERN_DEBUG "going sleep with: %ld > %lld\n", kcounter + PSTRACE_BUF_SIZE, g_count.counter);
+
+			/* adds customized info to wait_entry */
+			add_wait_queue(&rbuf_wait, &wait);
+			/* prepare to sleep: set state to TASK_INTERRUPTIBLE */
+			set_current_state(TASK_INTERRUPTIBLE);
 
 			schedule();
 
 			/* resumes */
 			printk(KERN_DEBUG "woke up with: %ld >= %lld\n", kcounter + PSTRACE_BUF_SIZE, g_count.counter);
+
+			/* TASK_RUNNING flag will already be set, simply remove from
+			 * wait queue
+			 */
+			remove_wait_queue(&rbuf_wait, &wait);
 		}
-		finish_wait(&rbuf_wait, &wait);
 	}
 
 
@@ -489,12 +522,10 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __us
 	
 	printk(KERN_DEBUG "going to kcopy\n");
 
-	spin_lock(&rec_list_lock);
-	cp_count = kcopy_pstrace_all_by_pid(kbuf, pid, kcounter);
-	spin_unlock(&rec_list_lock);
+	spin_lock_irq(&rec_list_lock);
+	cp_count = kcopy_pstrace_all_by_pid(kbuf, pid, &kcounter);
+	spin_unlock_irq(&rec_list_lock);
 
-	kcounter = g_count.counter;
-	
 real_usr_copy_back:
 	if (copy_to_user(buf, kbuf, sizeof(struct pstrace) * cp_count)) {
 		kfree(kbuf);
@@ -518,8 +549,8 @@ SYSCALL_DEFINE1(pstrace_clear, pid_t, pid)
 	}
 
 	/* removes the records matching the pid */
-	spin_lock(&rec_list_lock);
+	spin_lock_irq(&rec_list_lock);
 	remove_cb_by_pid(pid);
-	spin_unlock(&rec_list_lock);
+	spin_unlock_irq(&rec_list_lock);
 	return 0;
 }

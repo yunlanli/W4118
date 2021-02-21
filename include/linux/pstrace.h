@@ -25,6 +25,13 @@ struct cbnode {
 	long counter;
 };
 
+/* used for the private field of wait_queue_entry */
+struct psstruct {
+	struct task_struct *tsk;
+	long counter; /* so pstrace_add nows whether tsk should be woken up */
+	pid_t wait_pid; /* so pstrace_clear nows whether tsk should be woken up */
+};
+
 /* Add a record of the state change into the ring buffer. */
 void pstrace_add(struct task_struct *p);
 #endif
