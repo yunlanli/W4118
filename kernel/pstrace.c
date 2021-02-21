@@ -259,8 +259,8 @@ void pstrace_add(struct task_struct *p)
         	ps_add_owner = pid;
 
                 last_write = last_write->next;
+		fill_cbnode(last_write, p);
                 atomic_long_inc(&g_count);
-                fill_cbnode(last_write, p);
                 cbhead = cbhead->next;
         }
 
