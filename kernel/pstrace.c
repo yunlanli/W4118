@@ -40,7 +40,8 @@ static inline void remove_cb_all(void)
 {
 	struct cbnode *curr = cbhead, *temp;
 	
-	while (curr && cb_node_num.counter) {
+	last_write->next = NULL;
+	while (curr) {
 		temp = curr;
 		curr = curr->next;
 		/* freeing */
@@ -62,13 +63,15 @@ static inline void remove_and_find_head(pid_t pid)
 {
 	struct cbnode *curr = cbhead, *prev = last_write, *temp;
 
+	/* loop prevention */
+	last_write->next = NULL;
 	while (curr) {
 		if (curr->data.pid == pid) {
 			temp = curr;
 			curr = curr->next;
 			/* freeing */
 			spin_unlock(&rec_list_lock);
-			printk(KERN_DEBUG "remove_all freeing: %s\n", temp->data.comm);
+			printk(KERN_DEBUG "remove_and_find freeing: %s\n", temp->data.comm);
 			kfree(temp);	
 			spin_lock(&rec_list_lock);
 			/* done freeing */
@@ -83,7 +86,26 @@ static inline void remove_and_find_head(pid_t pid)
 	if (!curr) {
 		cbhead = NULL;
 		last_write = cbhead;
-		return;
+	}else{
+		/* restore the link */
+		last_write->next = cbhead;
+	}
+}
+
+/* only used for the case that there is EXACTLY one record in cb_buffer */
+static inline void remove_only_cb_by_pid(pid_t pid)
+{
+	struct cbnode *curr = cbhead;
+
+	if (curr->data.pid == pid) {
+		/* freeing */
+		spin_unlock(&rec_list_lock);
+		printk(KERN_DEBUG "remove_by_pid_1 freeing: %s\n", curr->data.comm);
+		kfree(curr);
+		spin_lock(&rec_list_lock);
+		/* done freeing */
+		cbhead = NULL;
+		last_write = cbhead;
 	}
 }
 
@@ -109,16 +131,7 @@ static inline void remove_cb_by_pid(pid_t pid){
 
 	/* there is only one entry */
 	if (prev == curr) {
-		if (curr->data.pid == pid) {
-			/* freeing */
-			spin_unlock(&rec_list_lock);
-			printk(KERN_DEBUG "remove_all freeing: %s\n", curr->data.comm);
-			kfree(curr);
-			spin_lock(&rec_list_lock);
-			/* done freeing */
-			cbhead = NULL;
-			last_write = cbhead;
-		}
+		remove_only_cb_by_pid(pid);
 		return;
 	}
 
@@ -132,18 +145,25 @@ static inline void remove_cb_by_pid(pid_t pid){
 	}
 
 	/* there is at least one entry */
+	if (prev == curr) {
+		remove_only_cb_by_pid(pid);
+		return;
+	}
+	/* there is at least two entries, so I need to do rewiring */
+	/* head now is guaranteed to be correct, so start from cbhead->next */
 	last_correct = cbhead;
 	prev = cbhead;
 	curr = cbhead->next;
 	/* to prevent loop */
-	while (curr != NULL && curr != cbhead) {	
+	last_write->next = NULL;
+	while (curr) {	
 		/* if found, free it */
 		if (curr->data.pid == pid) {
 			temp = curr;
 			curr = curr->next;
 			/* freeing */
 			spin_unlock(&rec_list_lock);
-			printk(KERN_DEBUG "remove_all freeing: %s\n", temp->data.comm);
+			printk(KERN_DEBUG "remove_by_pid freeing: %s\n", temp->data.comm);
 			kfree(temp);	
 			spin_lock(&rec_list_lock);
 			/* done freeing */
@@ -156,6 +176,8 @@ static inline void remove_cb_by_pid(pid_t pid){
 		}
 	}
 	last_write = last_correct;
+	/* restore it */
+	last_write->next = cbhead;
 }
 
 static inline void set_pid_invalid(struct list_head *node)
