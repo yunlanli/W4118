@@ -434,13 +434,15 @@ static inline int kcopy_pstrace_all(struct pstrace *kbuf, pid_t pi)
 {
 	struct cbnode *pos;
 	int cp_count = 0;
-	int size_count = PSTRACE_BUF_SIZE;
 
-	for (pos = cbhead; pos && size_count; pos = pos->next) {
+	/* prevent loop around */
+	last_write->next = NULL;
+	for (pos = cbhead; pos; pos = pos->next) {
 		copy_pstrace(kbuf+cp_count, &pos->data);
 		cp_count++;
-		size_count--;
 	}
+	/* restore it */
+	last_write->next = cbhead;
 
 	return cp_count;
 }
@@ -455,13 +457,17 @@ static inline int kcopy_pstrace_all_by_pid(struct pstrace *kbuf, pid_t pid)
 		return kcopy_pstrace_all(kbuf, pid);	
 	}
 
-	for (pos = cbhead; pos && size_count; pos = pos->next) {
+	/* prevent loop around */
+	last_write->next = NULL;
+	for (pos = cbhead; pos; pos = pos->next) {
 		size_count--;
 		if (pos->data.pid == pid) {
 			copy_pstrace(kbuf+cp_count, &pos->data);
 			cp_count++;
 		}
 	}
+	/* restore it */
+	last_write->next = cbhead;
 
 	return cp_count;
 }
