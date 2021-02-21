@@ -216,7 +216,7 @@ void pstrace_add(struct task_struct *p)
         if (cb_node_num.counter < 500) {
                 ncbnode = kmalloc(sizeof(struct cbnode), GFP_KERNEL);
                 fill_cbnode(ncbnode, p);
-                printk(KERN_DEBUG "comm %s, pid %d, state %ld\n", ncbnode->data.comm, ncbnode->data.pid, ncbnode->data.state);
+                printk(KERN_DEBUG "comm %s, pid %d, state %ld, rec_no: %ld\n", ncbnode->data.comm, ncbnode->data.pid, ncbnode->data.state, ncbnode->counter);
                 spin_lock(&rec_list_lock);
 
                 if (!cbhead) {/* the circular buffer is empty*/  
@@ -380,13 +380,18 @@ static inline void copy_pstrace(struct pstrace *dest, struct pstrace *src) {
 static inline int kcopy_pstrace_all(struct pstrace *kbuf, long kcounter)
 {
 	struct cbnode *pos;
-	int cp_count = 0;
+	int kcnt, cp_count = 0;
 	printk(KERN_DEBUG "entering kcopy_all\n");
 
 	/* prevent loop around */
 	last_write->next = NULL;
 	for (pos = cbhead; pos; pos = pos->next) {
-		if (pos->counter > kcounter && pos->counter <= kcounter + 500) {
+		printk(KERN_DEBUG "[%s] check pid=%d, counter=%ld, state: %ld\n\n", 
+				pos->data.comm, pos->data.pid, pos->counter, pos->data.state);
+
+		kcnt = kcounter == -1 || (pos->counter > kcounter && pos->counter <= kcounter + 500);
+
+		if (kcnt) {
 			printk(KERN_DEBUG "copying pid=%d\n", pos->data.pid);
 			copy_pstrace(kbuf+cp_count, &pos->data);
 			cp_count++;
@@ -401,23 +406,30 @@ static inline int kcopy_pstrace_all(struct pstrace *kbuf, long kcounter)
 static inline int kcopy_pstrace_all_by_pid(struct pstrace *kbuf, pid_t pid, long kcounter)
 {
 	struct cbnode *pos;
-	int cp_count = 0;
-	int size_count = PSTRACE_BUF_SIZE;
+	int kcnt, cp_count = 0;
 
 	if (pid == -1) {
 		return kcopy_pstrace_all(kbuf, kcounter);	
 	}
 
 	printk(KERN_DEBUG "entering kcopy_all_by_pid\n");
+	printk(KERN_DEBUG "[param] pid: %d, counter: %ld\n", pid, kcounter);
+
 	/* prevent loop around */
 	last_write->next = NULL;
 	for (pos = cbhead; pos; pos = pos->next) {
-		size_count--;
+		printk(KERN_DEBUG "[%s] check pid=%d, counter=%ld, state: %ld\n\n", 
+				pos->data.comm, pos->data.pid, pos->counter, pos->data.state);
 		/* only copy records of pid and have counter val
 		 * kcounter+1 ~ kcounter+500
 		 */
-		if (pos->data.pid == pid && pos->counter > kcounter
-				&& pos->counter <= kcounter + 500) {
+		printk(KERN_DEBUG "cond 1: %d, cond 2: %d, cond 3: %d\n", 
+				pos->data.pid == pid, pos->counter > kcounter, pos->counter <= kcounter + 500);
+		
+		/* condition 2 to check if a record should be copied to user */
+		kcnt = kcounter == -1 || (pos->counter > kcounter && pos->counter <= kcounter + 500);
+
+		if (pos->data.pid == pid && kcnt) {
 			printk(KERN_DEBUG "copying pid=%d\n", pos->data.pid);
 			copy_pstrace(kbuf+cp_count, &pos->data);
 			cp_count++;
@@ -450,39 +462,38 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __us
 		return -EFAULT;
 	
 	printk(KERN_DEBUG "entered get with kcounter: %ld, g_count.counter: %lld\n", kcounter, g_count.counter);
-	spin_lock(&rec_list_lock);
 
 	/* might sleep only if kcounter > 0 */
 	if (kcounter > 0) {
+		printk(KERN_DEBUG "Enter kcounter > 0 if block...\n");
 		/* need to check and sleep */
 		/* adds customized info to wait_entry */
 		add_wait_queue(&rbuf_wait, &wait);
 		while (kcounter + PSTRACE_BUF_SIZE >= g_count.counter) {
 			prepare_to_wait(&rbuf_wait, &wait, TASK_INTERRUPTIBLE);
-			/* releases the lock and goes to sleep */
-			spin_unlock(&rec_list_lock);
+
 			printk(KERN_DEBUG "going sleep with: %ld >= %lld\n", kcounter + PSTRACE_BUF_SIZE, g_count.counter);
+
 			schedule();
+
 			/* resumes */
 			printk(KERN_DEBUG "woke up with: %ld >= %lld\n", kcounter + PSTRACE_BUF_SIZE, g_count.counter);
-			spin_lock(&rec_list_lock);
 		}
 		finish_wait(&rbuf_wait, &wait);
 	}
 
-	/* g_count will not change while we hold the lock, so can assign
-	 * it to kcounter now
-	 */
-	kcounter = g_count.counter;
 
 	if (cbhead == NULL){
-		spin_unlock(&rec_list_lock);
 		goto real_usr_copy_back;
 	}
 	
 	printk(KERN_DEBUG "going to kcopy\n");
+
+	spin_lock(&rec_list_lock);
 	cp_count = kcopy_pstrace_all_by_pid(kbuf, pid, kcounter);
 	spin_unlock(&rec_list_lock);
+
+	kcounter = g_count.counter;
 	
 real_usr_copy_back:
 	if (copy_to_user(buf, kbuf, sizeof(struct pstrace) * cp_count)) {
