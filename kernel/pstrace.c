@@ -527,6 +527,7 @@ static inline void wake_up_by_condition(pid_t pid, int condition)
 		tmp = (struct psstruct *) p->private;
 		if( condition || tmp->wait_pid == pid ){
 			list_del(&p->entry);
+			/* this will not be recursive */
 			wake_up_process(tmp->tsk);
 		}
 	}
@@ -534,7 +535,6 @@ static inline void wake_up_by_condition(pid_t pid, int condition)
 
 static inline void wake_up_by_pid(pid_t pid)
 {
-
 	if(pid == -1){
 		/* wakes up all */
 		wake_up_by_condition(pid, 1);
