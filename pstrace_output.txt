@@ -1,30 +1,188 @@
-w4118@ubuntu:~$ test/tracker test/lifecycle
-tracking child process 1733
-[rec 0] comm: lifecycle, pid: 1733, state: 2
-[rec 1] comm: lifecycle, pid: 1733, state: 2
-[rec 2] comm: lifecycle, pid: 1733, state: 1
-[rec 3] comm: lifecycle, pid: 1733, state: 1
-[rec 4] comm: lifecycle, pid: 1733, state: 258
-[rec 5] comm: lifecycle, pid: 1733, state: 258
-[rec 6] comm: lifecycle, pid: 1733, state: 1
-[rec 7] comm: lifecycle, pid: 1733, state: 1
-[rec 8] comm: lifecycle, pid: 1733, state: 1
-[rec 9] comm: lifecycle, pid: 1733, state: 1
-[rec 10] comm: lifecycle, pid: 1733, state: 1
-[rec 11] comm: lifecycle, pid: 1733, state: 1
-[rec 12] comm: lifecycle, pid: 1733, state: 0
-[rec 13] comm: lifecycle, pid: 1733, state: 1
-[rec 14] comm: lifecycle, pid: 1733, state: 1
-[rec 15] comm: lifecycle, pid: 1733, state: 1
-[rec 16] comm: lifecycle, pid: 1733, state: 1
-[rec 17] comm: lifecycle, pid: 1733, state: 1
-[rec 18] comm: lifecycle, pid: 1733, state: 1
-[rec 19] comm: lifecycle, pid: 1733, state: 1
-[rec 20] comm: lifecycle, pid: 1733, state: 1
-[rec 21] comm: lifecycle, pid: 1733, state: 1
-[rec 22] comm: lifecycle, pid: 1733, state: 1
-[rec 23] comm: lifecycle, pid: 1733, state: 1
-[rec 24] comm: lifecycle, pid: 1733, state: 1
-[rec 25] comm: lifecycle, pid: 1733, state: 32
-[rec 26] comm: lifecycle, pid: 1733, state: 32
-[rec 27] comm: lifecycle, pid: 1733, state: 16
+w4118@ubuntu:~/test_$ ./tracker ./lifecycle
+tracking child process 1616
+get...
+get...
+[rec 0] comm: lifecycle, pid: 1616, state: 1
+get...
+[rec 0] comm: lifecycle, pid: 1616, state: 1
+[rec 1] comm: lifecycle, pid: 1616, state: 1
+[rec 2] comm: lifecycle, pid: 1616, state: 0
+[rec 3] comm: lifecycle, pid: 1616, state: 258
+[rec 4] comm: lifecycle, pid: 1616, state: 258
+[rec 5] comm: lifecycle, pid: 1616, state: 1
+get...
+[rec 0] comm: lifecycle, pid: 1616, state: 1
+[rec 1] comm: lifecycle, pid: 1616, state: 1
+[rec 2] comm: lifecycle, pid: 1616, state: 0
+[rec 3] comm: lifecycle, pid: 1616, state: 258
+[rec 4] comm: lifecycle, pid: 1616, state: 258
+[rec 5] comm: lifecycle, pid: 1616, state: 1
+[rec 6] comm: lifecycle, pid: 1616, state: 1
+[rec 7] comm: lifecycle, pid: 1616, state: 258
+[rec 8] comm: lifecycle, pid: 1616, state: 258
+[rec 9] comm: lifecycle, pid: 1616, state: 1
+get...
+[rec 0] comm: lifecycle, pid: 1616, state: 1
+[rec 1] comm: lifecycle, pid: 1616, state: 1
+[rec 2] comm: lifecycle, pid: 1616, state: 0
+[rec 3] comm: lifecycle, pid: 1616, state: 258
+[rec 4] comm: lifecycle, pid: 1616, state: 258
+[rec 5] comm: lifecycle, pid: 1616, state: 1
+[rec 6] comm: lifecycle, pid: 1616, state: 1
+[rec 7] comm: lifecycle, pid: 1616, state: 258
+[rec 8] comm: lifecycle, pid: 1616, state: 258
+[rec 9] comm: lifecycle, pid: 1616, state: 1
+[rec 10] comm: lifecycle, pid: 1616, state: 1
+[rec 11] comm: lifecycle, pid: 1616, state: 1
+get...
+[rec 0] comm: lifecycle, pid: 1616, state: 1
+[rec 1] comm: lifecycle, pid: 1616, state: 1
+[rec 2] comm: lifecycle, pid: 1616, state: 0
+[rec 3] comm: lifecycle, pid: 1616, state: 258
+[rec 4] comm: lifecycle, pid: 1616, state: 258
+[rec 5] comm: lifecycle, pid: 1616, state: 1
+[rec 6] comm: lifecycle, pid: 1616, state: 1
+[rec 7] comm: lifecycle, pid: 1616, state: 258
+[rec 8] comm: lifecycle, pid: 1616, state: 258
+[rec 9] comm: lifecycle, pid: 1616, state: 1
+[rec 10] comm: lifecycle, pid: 1616, state: 1
+[rec 11] comm: lifecycle, pid: 1616, state: 1
+[rec 12] comm: lifecycle, pid: 1616, state: 1
+[rec 13] comm: lifecycle, pid: 1616, state: 1
+get...
+[rec 0] comm: lifecycle, pid: 1616, state: 1
+[rec 1] comm: lifecycle, pid: 1616, state: 1
+[rec 2] comm: lifecycle, pid: 1616, state: 0
+[rec 3] comm: lifecycle, pid: 1616, state: 258
+[rec 4] comm: lifecycle, pid: 1616, state: 258
+[rec 5] comm: lifecycle, pid: 1616, state: 1
+[rec 6] comm: lifecycle, pid: 1616, state: 1
+[rec 7] comm: lifecycle, pid: 1616, state: 258
+[rec 8] comm: lifecycle, pid: 1616, state: 258
+[rec 9] comm: lifecycle, pid: 1616, state: 1
+[rec 10] comm: lifecycle, pid: 1616, state: 1
+[rec 11] comm: lifecycle, pid: 1616, state: 1
+[rec 12] comm: lifecycle, pid: 1616, state: 1
+[rec 13] comm: lifecycle, pid: 1616, state: 1
+[rec 14] comm: lifecycle, pid: 1616, state: 1
+[rec 15] comm: lifecycle, pid: 1616, state: 1
+get...
+[rec 0] comm: lifecycle, pid: 1616, state: 1
+[rec 1] comm: lifecycle, pid: 1616, state: 1
+[rec 2] comm: lifecycle, pid: 1616, state: 0
+[rec 3] comm: lifecycle, pid: 1616, state: 258
+[rec 4] comm: lifecycle, pid: 1616, state: 258
+[rec 5] comm: lifecycle, pid: 1616, state: 1
+[rec 6] comm: lifecycle, pid: 1616, state: 1
+[rec 7] comm: lifecycle, pid: 1616, state: 258
+[rec 8] comm: lifecycle, pid: 1616, state: 258
+[rec 9] comm: lifecycle, pid: 1616, state: 1
+[rec 10] comm: lifecycle, pid: 1616, state: 1
+[rec 11] comm: lifecycle, pid: 1616, state: 1
+[rec 12] comm: lifecycle, pid: 1616, state: 1
+[rec 13] comm: lifecycle, pid: 1616, state: 1
+[rec 14] comm: lifecycle, pid: 1616, state: 1
+[rec 15] comm: lifecycle, pid: 1616, state: 1
+[rec 16] comm: lifecycle, pid: 1616, state: 1
+[rec 17] comm: lifecycle, pid: 1616, state: 1
+get...
+[rec 0] comm: lifecycle, pid: 1616, state: 1
+[rec 1] comm: lifecycle, pid: 1616, state: 1
+[rec 2] comm: lifecycle, pid: 1616, state: 0
+[rec 3] comm: lifecycle, pid: 1616, state: 258
+[rec 4] comm: lifecycle, pid: 1616, state: 258
+[rec 5] comm: lifecycle, pid: 1616, state: 1
+[rec 6] comm: lifecycle, pid: 1616, state: 1
+[rec 7] comm: lifecycle, pid: 1616, state: 258
+[rec 8] comm: lifecycle, pid: 1616, state: 258
+[rec 9] comm: lifecycle, pid: 1616, state: 1
+[rec 10] comm: lifecycle, pid: 1616, state: 1
+[rec 11] comm: lifecycle, pid: 1616, state: 1
+[rec 12] comm: lifecycle, pid: 1616, state: 1
+[rec 13] comm: lifecycle, pid: 1616, state: 1
+[rec 14] comm: lifecycle, pid: 1616, state: 1
+[rec 15] comm: lifecycle, pid: 1616, state: 1
+[rec 16] comm: lifecycle, pid: 1616, state: 1
+[rec 17] comm: lifecycle, pid: 1616, state: 1
+[rec 18] comm: lifecycle, pid: 1616, state: 1
+[rec 19] comm: lifecycle, pid: 1616, state: 1
+get...
+[rec 0] comm: lifecycle, pid: 1616, state: 1
+[rec 1] comm: lifecycle, pid: 1616, state: 1
+[rec 2] comm: lifecycle, pid: 1616, state: 0
+[rec 3] comm: lifecycle, pid: 1616, state: 258
+[rec 4] comm: lifecycle, pid: 1616, state: 258
+[rec 5] comm: lifecycle, pid: 1616, state: 1
+[rec 6] comm: lifecycle, pid: 1616, state: 1
+[rec 7] comm: lifecycle, pid: 1616, state: 258
+[rec 8] comm: lifecycle, pid: 1616, state: 258
+[rec 9] comm: lifecycle, pid: 1616, state: 1
+[rec 10] comm: lifecycle, pid: 1616, state: 1
+[rec 11] comm: lifecycle, pid: 1616, state: 1
+[rec 12] comm: lifecycle, pid: 1616, state: 1
+[rec 13] comm: lifecycle, pid: 1616, state: 1
+[rec 14] comm: lifecycle, pid: 1616, state: 1
+[rec 15] comm: lifecycle, pid: 1616, state: 1
+[rec 16] comm: lifecycle, pid: 1616, state: 1
+[rec 17] comm: lifecycle, pid: 1616, state: 1
+[rec 18] comm: lifecycle, pid: 1616, state: 1
+[rec 19] comm: lifecycle, pid: 1616, state: 1
+[rec 20] comm: lifecycle, pid: 1616, state: 1
+[rec 21] comm: lifecycle, pid: 1616, state: 0
+[rec 22] comm: lifecycle, pid: 1616, state: 1
+get...
+[rec 0] comm: lifecycle, pid: 1616, state: 1
+[rec 1] comm: lifecycle, pid: 1616, state: 1
+[rec 2] comm: lifecycle, pid: 1616, state: 0
+[rec 3] comm: lifecycle, pid: 1616, state: 258
+[rec 4] comm: lifecycle, pid: 1616, state: 258
+[rec 5] comm: lifecycle, pid: 1616, state: 1
+[rec 6] comm: lifecycle, pid: 1616, state: 1
+[rec 7] comm: lifecycle, pid: 1616, state: 258
+[rec 8] comm: lifecycle, pid: 1616, state: 258
+[rec 9] comm: lifecycle, pid: 1616, state: 1
+[rec 10] comm: lifecycle, pid: 1616, state: 1
+[rec 11] comm: lifecycle, pid: 1616, state: 1
+[rec 12] comm: lifecycle, pid: 1616, state: 1
+[rec 13] comm: lifecycle, pid: 1616, state: 1
+[rec 14] comm: lifecycle, pid: 1616, state: 1
+[rec 15] comm: lifecycle, pid: 1616, state: 1
+[rec 16] comm: lifecycle, pid: 1616, state: 1
+[rec 17] comm: lifecycle, pid: 1616, state: 1
+[rec 18] comm: lifecycle, pid: 1616, state: 1
+[rec 19] comm: lifecycle, pid: 1616, state: 1
+[rec 20] comm: lifecycle, pid: 1616, state: 1
+[rec 21] comm: lifecycle, pid: 1616, state: 0
+[rec 22] comm: lifecycle, pid: 1616, state: 1
+[rec 23] comm: lifecycle, pid: 1616, state: 1
+[rec 24] comm: lifecycle, pid: 1616, state: 1
+get...
+[rec 0] comm: lifecycle, pid: 1616, state: 1    <--- TASK_INTERRUPTIBLE
+[rec 1] comm: lifecycle, pid: 1616, state: 1
+[rec 2] comm: lifecycle, pid: 1616, state: 0    <--- TASK_RUNNING
+[rec 3] comm: lifecycle, pid: 1616, state: 258  <--- TASK_UNINTERRUPTIBLE | TASK_WAKEKILL
+[rec 4] comm: lifecycle, pid: 1616, state: 258
+[rec 5] comm: lifecycle, pid: 1616, state: 1
+[rec 6] comm: lifecycle, pid: 1616, state: 1
+[rec 7] comm: lifecycle, pid: 1616, state: 258
+[rec 8] comm: lifecycle, pid: 1616, state: 258
+[rec 9] comm: lifecycle, pid: 1616, state: 1
+[rec 10] comm: lifecycle, pid: 1616, state: 1
+[rec 11] comm: lifecycle, pid: 1616, state: 1
+[rec 12] comm: lifecycle, pid: 1616, state: 1
+[rec 13] comm: lifecycle, pid: 1616, state: 1
+[rec 14] comm: lifecycle, pid: 1616, state: 1
+[rec 15] comm: lifecycle, pid: 1616, state: 1
+[rec 16] comm: lifecycle, pid: 1616, state: 1
+[rec 17] comm: lifecycle, pid: 1616, state: 1
+[rec 18] comm: lifecycle, pid: 1616, state: 1
+[rec 19] comm: lifecycle, pid: 1616, state: 1
+[rec 20] comm: lifecycle, pid: 1616, state: 1
+[rec 21] comm: lifecycle, pid: 1616, state: 0
+[rec 22] comm: lifecycle, pid: 1616, state: 1
+[rec 23] comm: lifecycle, pid: 1616, state: 1
+[rec 24] comm: lifecycle, pid: 1616, state: 1
+[rec 25] comm: lifecycle, pid: 1616, state: 1
+[rec 26] comm: lifecycle, pid: 1616, state: 32  <--- TASK_ZOMBIE
+[rec 27] comm: lifecycle, pid: 1616, state: 32
+[rec 28] comm: lifecycle, pid: 1616, state: 16  <--- TASK_DEAD

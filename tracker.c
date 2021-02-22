@@ -14,18 +14,27 @@ struct pstrace {
 	long state;		/* The state of the process */
 };
 
+static inline void trace(pid_t pid, struct pstrace *buf, long *counter, int *count)
+{
+	fprintf(stderr, "get...\n");
+
+	*counter = -1;
+	*count = syscall(438, pid, buf, counter);
+
+	for (int i = 0; i < *count; i++)
+		printf("[rec %d] comm: %s, pid: %d, state: %ld\n",
+				i, (buf+i)->comm, (buf+i)->pid, (buf+i)->state);
+
+	sleep(1);
+}
+
 int main(int argc, char **argv) {
 	if (argc != 2)
 		fprintf(stderr, "<usage> ./tracker <filepath>\n");
-	long counter = -1;
 	pid_t pid;
 	int wstatus, count;
+	long counter;
 	char *filepath = argv[1];
-
-#if 0
-	printf("filepath: ");
-	fscanf(stdin, "%s", filepath);
-#endif
 
 	pid = fork();
 
@@ -42,14 +51,12 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "[execl] error: %s\n", strerror(errno));
 	} else {
 		struct pstrace *buf = malloc(sizeof(struct pstrace) * PSTRACE_BUF_SIZE);
-		if (waitpid(pid, &wstatus, 0) != pid)
-			fprintf(stderr, "[waitpid] error: %s\n", strerror(errno));
+		while (waitpid(pid, &wstatus, WNOHANG) == 0) {
+			trace(pid, buf, &counter, &count);
+		}
 
-		count = syscall(438, pid, buf, &counter);
+		trace(pid, buf, &counter, &count);
 
-		for (int i = 0; i < count; i++)
-			printf("[rec %d] comm: %s, pid: %d, state: %ld\n",
-					i, (buf+i)->comm, (buf+i)->pid, (buf+i)->state);
 		free(buf);
 	}
 
