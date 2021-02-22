@@ -14,24 +14,24 @@
 
 atomic_t cb_node_num = ATOMIC_INIT(0); /* number of actually filled nodes */
 atomic_long_t g_count = ATOMIC_LONG_INIT(0);/* number of records added to ring buffer */
-int enabled_all = 0; /* flag to indicate if all processes are enabled tracing */
-pid_t ps_add_owner = 0;
+int enabled_all; /* flag to indicate if all processes are enabled tracing */
+pid_t ps_add_owner;
 
-struct pspid traced[PSTRACE_BUF_SIZE] = { 
-        [0 ... PSTRACE_BUF_SIZE - 1] = { .valid = 0 } 
+struct pspid traced[PSTRACE_BUF_SIZE] = {
+[0 ... PSTRACE_BUF_SIZE - 1] = { .valid = 0 }
 };  /* buffer to store traced process pid */
 
-struct cbnode *cbhead = NULL;
-struct cbnode *last_write = NULL;
+struct cbnode *cbhead;
+struct cbnode *last_write;
 
 LIST_HEAD(pid_list_head); /* list head of traced_list */
 DEFINE_SPINLOCK(pid_list); /* spinlock for modifying traced */
-DEFINE_SPINLOCK(rec_list_lock); /* rec_list_lock is used to access: circular_buffer & last_write_ptr */ 
-
-/* 
+/* rec_list_lock is used to access: circular_buffer & last_write_ptr */
+DEFINE_SPINLOCK(rec_list_lock);
+/*
  * wait queue:
  * @rbuf_wait: struct wait_queue_head
- * @rbuf_wait.head: struct list_head 
+ * @rbuf_wait.head: struct list_head
  * @rbuf_wait.lock: spinlock_t
  */
 DECLARE_WAIT_QUEUE_HEAD(rbuf_wait);
@@ -53,27 +53,27 @@ static inline void remove_cb_all(void)
 		kfree(temp);
 		spin_lock_irq(&rec_list_lock);
 		/* done freeing */
-		atomic_dec(&cb_node_num);		
+		atomic_dec(&cb_node_num);
 	}
 	cbhead = NULL;
 	last_write = cbhead;
 }
 
 /* removes all the entries in circular buffer that matches @pid and frees it */
-static inline void remove_cb_by_pid(pid_t pid){
+static inline void remove_cb_by_pid(pid_t pid)
+{
 	struct cbnode *curr, *temp, *prev, *last_correct;
 	struct cbnode sentinel;
 
 	curr = cbhead;
 	/* do nothing when empty list */
-	if (!curr) {
+	if (!curr)
 		return;
-	}
 
 	/* remove all */
 	if (pid == -1) {
 		remove_cb_all();
-		return;	
+		return;
 	}
 
 	last_correct = cbhead;
@@ -81,7 +81,7 @@ static inline void remove_cb_by_pid(pid_t pid){
 	last_write->next = &sentinel;
 	sentinel.next = cbhead;
 	prev = &sentinel;
-	while (curr != &sentinel) {	
+	while (curr != &sentinel) {
 		/* if found, free it */
 		if (curr->data.pid == pid) {
 			temp = curr;
@@ -89,12 +89,12 @@ static inline void remove_cb_by_pid(pid_t pid){
 			/* freeing */
 			spin_unlock_irq(&rec_list_lock);
 			printk(KERN_DEBUG "remove_by_pid freeing: %s\n", temp->data.comm);
-			kfree(temp);	
+			kfree(temp);
 			spin_lock_irq(&rec_list_lock);
 			/* done freeing */
 			prev->next = curr;
 			atomic_dec(&cb_node_num);
-		}else{
+		} else {
 			last_correct = curr;
 			prev = curr;
 			curr = curr->next;
@@ -113,7 +113,7 @@ static inline void set_pid_invalid(struct list_head *node)
 	container->valid = 0;
 }
 
-/* 
+/*
  * clear linked list of pids
  *
  *	To clear linked list of pid, for each node in the linked
@@ -141,13 +141,13 @@ static inline struct list_head *list_find(struct list_head *head, pid_t pid)
 		if (container->pid == pid)
 			return pos;
 	}
-	
+
 	/* pid not found */
 	return NULL;
 }
 
 /*
- * finds the next write position in the array named traced 
+ * finds the next write position in the array named traced
  * and sets the global pointer pid_next_write to it.
  *
  * This will called before adding a pid to the linked list
@@ -180,7 +180,8 @@ return_from_find_pid_next:
 	return next;
 }
 
-static inline void fill_cbnode(struct cbnode *n, struct task_struct *p) {
+static inline void fill_cbnode(struct cbnode *n, struct task_struct *p)
+{
 	strncpy(n->data.comm, p->comm, sizeof(p->comm));
 	n->data.pid = p->pid;
 	if (p->exit_state == 16 || p->exit_state == 32)
@@ -193,87 +194,91 @@ static inline void fill_cbnode(struct cbnode *n, struct task_struct *p) {
 
 void pstrace_add(struct task_struct *p)
 {
-        pid_t pid;
-        struct cbnode *ncbnode;
+	pid_t pid;
+	struct cbnode *ncbnode;
 	struct psstruct *wq_private;
 	struct wait_queue_entry *pos, *n;
 
-        pid = p->pid;
-        if (pid < 0) /* this pid is invalid */
-                goto end;
+	pid = p->pid;
+	if (pid < 0) /* this pid is invalid */
+		goto end;
 
-        spin_lock(&pid_list);
-        if (!enabled_all) {
-                if (list_find(&pid_list_head, pid) == NULL) {
-                        spin_unlock(&pid_list);
-                        goto end;   
-                }
-        }
-        else {
-                if (list_find(&pid_list_head, pid) != NULL) {
-                        spin_unlock(&pid_list);
-                        goto end;
-                }
-        }
-        spin_unlock(&pid_list);
+	spin_lock(&pid_list);
+	if (!enabled_all) {
+		if (list_find(&pid_list_head, pid) == NULL) {
+			spin_unlock(&pid_list);
+			goto end;
+		}
+	} else {
+		if (list_find(&pid_list_head, pid) != NULL) {
+			spin_unlock(&pid_list);
+			goto end;
+		}
+	}
+	spin_unlock(&pid_list);
 
-        if (spin_is_locked(&rec_list_lock) != 0) { /*lock is currently unavailable*/
-        	if (pid == ps_add_owner)
-        		goto end;
-       	}
+	if (spin_is_locked(&rec_list_lock) != 0) {
+		/*lock is currently unavailable*/
+		if (pid == ps_add_owner)
+			goto end;
+	}
 
-        if (cb_node_num.counter < 500) {
-                ncbnode = kmalloc(sizeof(struct cbnode), GFP_KERNEL);
-                fill_cbnode(ncbnode, p);
-                printk(KERN_DEBUG "comm %s, pid %d, state %ld, rec_no: %ld\n", ncbnode->data.comm, ncbnode->data.pid, ncbnode->data.state, ncbnode->counter);
-                
-		/* Two cases, we both want to acquire the lock
-		 * 1. lock is available
-		 * 2. lock is not available && process doesn't hold the lock,
-		 * spin
-		 *
-		 * We put it here because this MUST come after kmalloc!!
-		 */
-                spin_lock_irq(&rec_list_lock);
-                ps_add_owner = pid; /* declare ownership */
+	if (cb_node_num.counter < 500) {
+		ncbnode = kmalloc(sizeof(struct cbnode), GFP_KERNEL);
+		fill_cbnode(ncbnode, p);
+		printk(KERN_DEBUG "comm %s, pid %d, state %ld, rec_no: %ld\n",
+			ncbnode->data.comm, ncbnode->data.pid,
+			ncbnode->data.state, ncbnode->counter);
 
-                if (!cbhead) {/* the circular buffer is empty*/  
-                        cbhead = ncbnode; /* head always points to the first node*/
-                        ncbnode->next = cbhead;
-                        last_write = ncbnode; 
-                } else {
-                        last_write->next = ncbnode;
-                        last_write = ncbnode;
-                        last_write->next = cbhead;
-                }
+	/* Two cases, we both want to acquire the lock
+	* 1. lock is available
+	* 2. lock is not available && process doesn't hold the lock,
+	* spin
+	*
+	* We put it here because this MUST come after kmalloc!!
+	*/
+		spin_lock_irq(&rec_list_lock);
+		ps_add_owner = pid; /* declare ownership */
 
-                /* update g_count */
-                atomic_inc(&cb_node_num);
-                atomic_long_inc(&g_count);
+		if (!cbhead) {/* the circular buffer is empty*/
+			/* head always points to the first node*/
+			cbhead = ncbnode;
+			ncbnode->next = cbhead;
+			last_write = ncbnode;
+		} else {
+			last_write->next = ncbnode;
+			last_write = ncbnode;
+			last_write->next = cbhead;
+		}
 
-        } else {
-        	/* cb_node_num == 500 */
+		/* update g_count */
+		atomic_inc(&cb_node_num);
+		atomic_long_inc(&g_count);
 
-		/* same as above */
-        	spin_lock_irq(&rec_list_lock);
-        	ps_add_owner = pid;
+	} else {
+	/* cb_node_num == 500 */
 
-                last_write = last_write->next;
+	/* same as above */
+		spin_lock_irq(&rec_list_lock);
+		ps_add_owner = pid;
+
+		last_write = last_write->next;
 		fill_cbnode(last_write, p);
-                atomic_long_inc(&g_count);
-                cbhead = cbhead->next;
-        }
+		atomic_long_inc(&g_count);
+		cbhead = cbhead->next;
+	}
 
 	/* we want to hold the lock while waking up processes,
-	 * DON'T release the lock */
+	* DON'T release the lock
+	*/
 
 	/* have added record to buffer, updated g_count,
-	 * wants to wake up relevant tasks if exist
-	 *
-	 * It's fine calling wake_up_process while holding the run queue lock
-	 * because the process that's get woken up is another process (since
-	 * it's not running but sleeping.
-	 */
+	* wants to wake up relevant tasks if exist
+	*
+	* It's fine calling wake_up_process while holding the run queue lock
+	* because the process that's get woken up is another process (since
+	* it's not running but sleeping.
+	*/
 	spin_lock_irq(&rbuf_wait.lock);
 	list_for_each_entry_safe(pos, n, &rbuf_wait.head, entry) {
 		wq_private = (struct psstruct *) pos->private;
@@ -287,8 +292,8 @@ void pstrace_add(struct task_struct *p)
 	spin_unlock_irq(&rbuf_wait.lock);
 
 	/* Have put all relevant sleeping processes to the run queue,
-	 * release lock for ring buffer
-	 */
+	* release lock for ring buffer
+	*/
 	spin_unlock_irq(&rec_list_lock);
 
 end:
@@ -311,7 +316,6 @@ SYSCALL_DEFINE1(pstrace_enable, pid_t, pid)
 		 * 2. enabled_all = 1, we are currently disabe tracing a list of pids:
 		 *    clear linked list of pid
 		 */
-		
 		if (!enabled_all)
 			enabled_all = 1;
 
@@ -344,7 +348,8 @@ SYSCALL_DEFINE1(pstrace_enable, pid_t, pid)
 		pos = list_find(&pid_list_head, pid);
 		if (pos != NULL) {
 			set_pid_invalid(pos);
-			__list_del(pos->prev, pos->next); /* remove pid from linked list */
+			 /* remove pid from linked list */
+			__list_del(pos->prev, pos->next);
 		}
 	}
 
@@ -386,10 +391,10 @@ SYSCALL_DEFINE1(pstrace_disable, pid_t, pid)
 	/* single valid pid to disable tracing
 	 * 1. enabled_all = 0, pid list contains pids being traced
 	 * remove pid from linked list if it is in it, set pspid invalid
-	 * 
+	 *
 	 * 2. enabled_all = 1, pid list contains pids being disabled tracing
 	 * add pid to linked list if it's not in it, update next write
- 	 */
+	 */
 
 	if (enabled_all) {
 		pos = list_find(&pid_list_head, pid);
@@ -416,7 +421,8 @@ return_from_disable:
 }
 
 
-static inline void copy_pstrace(struct pstrace *dest, struct pstrace *src) {
+static inline void copy_pstrace(struct pstrace *dest, struct pstrace *src)
+{
 	strncpy(dest->comm, src->comm, sizeof(src->comm));
 	dest->pid = src->pid;
 	dest->state = src->state;
@@ -426,12 +432,12 @@ static inline int kcopy_pstrace_all(struct pstrace *kbuf, long *kcounter)
 {
 	struct cbnode *pos;
 	int kcnt, cp_count = 0;
-	printk(KERN_DEBUG "entering kcopy_all\n");
 
+	printk(KERN_DEBUG "entering kcopy_all\n");
 	/* prevent loop around */
 	last_write->next = NULL;
 	for (pos = cbhead; pos; pos = pos->next) {
-		printk(KERN_DEBUG "[%s] check pid=%d, counter=%ld, state: %ld\n\n", 
+		printk(KERN_DEBUG "[%s] check pid=%d, counter=%ld, state: %ld\n\n",
 				pos->data.comm, pos->data.pid, pos->counter, pos->data.state);
 
 		kcnt = *kcounter == -1 || (pos->counter > *kcounter && pos->counter <= *kcounter + 500);
@@ -454,9 +460,8 @@ static inline int kcopy_pstrace_all_by_pid(struct pstrace *kbuf, pid_t pid, long
 	struct cbnode *pos;
 	int kcnt, cp_count = 0;
 
-	if (pid == -1) {
-		return kcopy_pstrace_all(kbuf, kcounter);	
-	}
+	if (pid == -1)
+		return kcopy_pstrace_all(kbuf, kcounter);
 
 	printk(KERN_DEBUG "entering kcopy_all_by_pid\n");
 	printk(KERN_DEBUG "[param] pid: %d, counter: %ld\n", pid, *kcounter);
@@ -464,14 +469,14 @@ static inline int kcopy_pstrace_all_by_pid(struct pstrace *kbuf, pid_t pid, long
 	/* prevent loop around */
 	last_write->next = NULL;
 	for (pos = cbhead; pos; pos = pos->next) {
-		printk(KERN_DEBUG "[%s] check pid=%d, counter=%ld, state: %ld\n\n", 
+		printk(KERN_DEBUG "[%s] check pid=%d, counter=%ld, state: %ld\n\n",
 				pos->data.comm, pos->data.pid, pos->counter, pos->data.state);
 		/* only copy records of pid and have counter val
 		 * *kcounter+1 ~ *kcounter+500
 		 */
-		printk(KERN_DEBUG "cond 1: %d, cond 2: %d, cond 3: %d\n", 
+		printk(KERN_DEBUG "cond 1: %d, cond 2: %d, cond 3: %d\n",
 				pos->data.pid == pid, pos->counter > *kcounter, pos->counter <= *kcounter + 500);
-		
+
 		/* condition 2 to check if a record should be copied to user */
 		kcnt = *kcounter == -1 || (pos->counter > *kcounter && pos->counter <= *kcounter + 500);
 
@@ -508,7 +513,7 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __us
 
 	if (copy_from_user(&kcounter, counter, sizeof(long)))
 		return -EFAULT;
-	
+
 	printk(KERN_DEBUG "entered get with kcounter: %ld, g_count.counter: %lld\n", kcounter, g_count.counter);
 
 	/* initialize wait queue entry's private field */
@@ -543,10 +548,9 @@ SYSCALL_DEFINE3(pstrace_get, pid_t, pid, struct pstrace __user *, buf, long __us
 	}
 
 
-	if (cbhead == NULL){
+	if (cbhead == NULL)
 		goto real_usr_copy_back;
-	}
-	
+
 	printk(KERN_DEBUG "going to kcopy\n");
 
 	spin_lock_irq(&rec_list_lock);
@@ -575,9 +579,9 @@ static inline void wake_up_by_condition(pid_t pid, int condition)
 	struct wait_queue_entry *p, *next;
 	struct psstruct *tmp;
 
-	list_for_each_entry_safe(p, next, &rbuf_wait.head, entry){
+	list_for_each_entry_safe(p, next, &rbuf_wait.head, entry) {
 		tmp = (struct psstruct *) p->private;
-		if( condition || tmp->wait_pid == pid ){
+		if (condition || tmp->wait_pid == pid) {
 			list_del(&p->entry);
 			/* this will not be recursive */
 			wake_up_process(tmp->tsk);
@@ -587,10 +591,10 @@ static inline void wake_up_by_condition(pid_t pid, int condition)
 
 static inline void wake_up_by_pid(pid_t pid)
 {
-	if(pid == -1){
+	if (pid == -1) {
 		/* wakes up all */
 		wake_up_by_condition(pid, 1);
-	}else{
+	} else {
 		/* wakes up only if same pid */
 		wake_up_by_condition(pid, 0);
 	}
@@ -598,12 +602,11 @@ static inline void wake_up_by_pid(pid_t pid)
 
 SYSCALL_DEFINE1(pstrace_clear, pid_t, pid)
 {
-	if (pid != -1 && pid < 0) {
+	if (pid != -1 && pid < 0)
 		return -EINVAL;
-	}
 
 	spin_lock_irq(&rec_list_lock);
-	/* 
+	/*
 	 * this will terminate pstrace_add incurred as a result of
 	 * wake_up_by_pid
 	 */
