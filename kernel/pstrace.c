@@ -602,6 +602,13 @@ SYSCALL_DEFINE1(pstrace_clear, pid_t, pid)
 		return -EINVAL;
 	}
 
+	spin_lock_irq(&rec_list_lock);
+	/* 
+	 * this will terminate pstrace_add incurred as a result of
+	 * wake_up_by_pid
+	 */
+	ps_add_owner = current->pid;
+
 	/* wakes stuff up */
 	/* grabs the lock */
 	spin_lock_irq(&rbuf_wait.lock);
@@ -609,7 +616,6 @@ SYSCALL_DEFINE1(pstrace_clear, pid_t, pid)
 	spin_unlock_irq(&rbuf_wait.lock);
 
 	/* removes the records matching the pid */
-	spin_lock_irq(&rec_list_lock);
 	remove_cb_by_pid(pid);
 	spin_unlock_irq(&rec_list_lock);
 	return 0;
