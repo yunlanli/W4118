@@ -4,6 +4,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#define BUF_SIZE 102400
+
 int ack(int m, int n) 
 { 
 	if (m == 0){ 
@@ -19,13 +21,13 @@ int ack(int m, int n)
 } 
 
 int main(){
-	int file = open("./lifecycle.c", __O_LARGEFILE);
-	char buf[10];
+	int file = open("./sample", __O_LARGEFILE);
+	char buf[BUF_SIZE]; 
 	int i;
 
 	for (i = 0; i < 10; i++){
-		ack(3,8);
-		sleep(3);
+		ack(2,8);
+		sleep(1);
 		read(file, buf, sizeof(buf));
 	}
 

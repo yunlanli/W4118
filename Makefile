@@ -9,11 +9,15 @@ LDFLAGS =
 LDLIBS = 
 
 .PHONY: all
-all: clean test generator test2 test3 lifecycle
+all: clean test generator test2 test3 lifecycle tracker
+
+tracker: tracker.c
+
+gen: gen.c
 
 .PHONY: clean
 clean:
-		rm -f *.o *~ a.out core test generator test3 lifecycle
+		rm -f *.o *~ a.out core test generator test3 lifecycle tracker gen test2
 
 test: test.c
 
