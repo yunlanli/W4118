@@ -65,15 +65,27 @@ int main()
 		
 		struct pstrace *rec = buf;
 		for (int i = 0; i<sys_ret; i++){
+<<<<<<< HEAD
 			if (rec->pid == pid)
 				printf("%s, %d, %ld\n", rec->comm, rec->pid, rec->state);
 		}
 #endif
+=======
+			printf("%s, %d, %ld\n", rec->comm, rec->pid, rec->state);
+			rec++;
+		}
+#endif
+#if 0
+>>>>>>> 893f352e9... Attempted to imitate the lifecycle of a pro
 		/* clear all state chagne records of pid */
 		sys_ret = syscall(439, -1);
 		if (sys_ret)
 			printf("pstrace_clear returned: %d\n", sys_ret);
+<<<<<<< HEAD
 
+=======
+#endif
+>>>>>>> 893f352e9... Attempted to imitate the lifecycle of a pro
 	}
 
 	return 0;
