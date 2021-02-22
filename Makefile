@@ -9,24 +9,18 @@ LDFLAGS =
 LDLIBS = 
 
 .PHONY: all
-all: clean test generator test2 test3 lifecycle tracker
+all: clean lifecycle tracker tmp
 
 tracker: tracker.c
 
-gen: gen.c
+lifecycle: lifecycle.c
+
+tmp: tmp/Makefile tmp/test tmp/test2 tmp/test3 tmp/generator
+	cd tmp && make
 
 .PHONY: clean
 clean:
-		rm -f *.o *~ a.out core test generator test3 lifecycle tracker gen test2
+		rm -f *.o *~ lifecycle tracker tmp/test tmp/test2 tmp/test3 tmp/generator
 
-test: test.c
-
-generator: generator.c
-
-test2: test2.c
-
-test3: test3.c
-
-lifecycle: lifecycle.c
 
 
