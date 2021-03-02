@@ -5291,6 +5291,24 @@ out_unlock:
 	return retval;
 }
 
+#define MAX_CPUS 8
+
+struct wrr_info {
+	int num_cpus;
+	int nr_running[MAX_CPUS];
+	int total_weight[MAX_CPUS];
+};
+
+SYSCALL_DEFINE1(get_wrr_info, struct wrr_info __user *, buf)
+{
+	return 0;
+}
+
+SYSCALL_DEFINE1(set_wrr_weight, int, weight)
+{
+	return 0;
+}
+
 /*
  * Copy the kernel size attribute structure (which might be larger
  * than what user-space knows about) to user-space.
