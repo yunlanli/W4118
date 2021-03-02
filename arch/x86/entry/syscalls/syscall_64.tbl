@@ -357,8 +357,8 @@
 433	common	fspick			__x64_sys_fspick
 434	common	pidfd_open		__x64_sys_pidfd_open
 435	common	clone3			__x64_sys_clone3/ptregs
-436 common  get_wrr_info	__x64_sys_get_wrr_info
-437 common  set_wrr_weight	__x64_sys_set_wrr_weight
+436	common  get_wrr_info		__x64_sys_get_wrr_info
+437	common	set_wrr_weight		__x64_sys_set_wrr_weight
 
 #
 # x32-specific system call numbers start at 512 to avoid cache impact
