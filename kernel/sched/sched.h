@@ -68,6 +68,8 @@
 
 #include <asm/tlb.h>
 
+#include <linux/sched/wrr.h>
+
 #ifdef CONFIG_PARAVIRT
 # include <asm/paravirt.h>
 #endif
@@ -1800,6 +1802,7 @@ extern const struct sched_class dl_sched_class;
 extern const struct sched_class rt_sched_class;
 extern const struct sched_class fair_sched_class;
 extern const struct sched_class idle_sched_class;
+extern const struct sched_class wrr_sched_class;
 
 static inline bool sched_stop_runnable(struct rq *rq)
 {
