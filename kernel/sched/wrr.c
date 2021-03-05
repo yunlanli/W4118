@@ -7,14 +7,14 @@
 static int
 select_task_rq_idle(struct task_struct *p, int cpu, int sd_flag, int flags)
 {
-	printk(KERN_DEBUG "wrr:select_task_rq_idle\n");
+//	printk(KERN_DEBUG "wrr:select_task_rq_idle\n");
 	return task_cpu(p); /* IDLE tasks as never migrated */
 }
 
 static int
 balance_idle(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 {
-	printk(KERN_DEBUG "wrr:balance_idle\n");
+//	printk(KERN_DEBUG "wrr:balance_idle\n");
 	return 0;
 }
 #endif
@@ -24,18 +24,18 @@ balance_idle(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
  */
 static void check_preempt_curr_idle(struct rq *rq, struct task_struct *p, int flags)
 {
-	printk(KERN_DEBUG "wrr:check_preempt_curr_idle\n");
+//	printk(KERN_DEBUG "wrr:check_preempt_curr_idle\n");
 	resched_curr(rq);
 }
 
 static void put_prev_task_idle(struct rq *rq, struct task_struct *prev)
 {
-	printk(KERN_DEBUG "wrr:put_prev_task_idle\n");
+//	printk(KERN_DEBUG "wrr:put_prev_task_idle\n");
 }
 
 static void set_next_task_idle(struct rq *rq, struct task_struct *next)
 {
-	printk(KERN_DEBUG "wrr:set_next_task_idle\n");
+//	printk(KERN_DEBUG "wrr:set_next_task_idle\n");
 	update_idle_core(rq);
 	schedstat_inc(rq->sched_goidle);
 }
@@ -43,15 +43,7 @@ static void set_next_task_idle(struct rq *rq, struct task_struct *next)
 static struct task_struct *
 pick_next_task_idle(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 {
-	struct task_struct *next = rq->idle;
-	printk(KERN_DEBUG "wrr:pick_next_task_idle\n");
-
-	if (prev)
-		put_prev_task(rq, prev);
-
-	set_next_task_idle(rq, next);
-
-	return next;
+	return NULL;
 }
 
 /*
@@ -61,7 +53,7 @@ pick_next_task_idle(struct rq *rq, struct task_struct *prev, struct rq_flags *rf
 static void
 dequeue_task_idle(struct rq *rq, struct task_struct *p, int flags)
 {
-	printk(KERN_DEBUG "wrr:dequeue_task_idle\n");
+//	printk(KERN_DEBUG "wrr:dequeue_task_idle\n");
 	raw_spin_unlock_irq(&rq->lock);
 	printk(KERN_ERR "bad scheduling from wrr class\n");
 	dump_stack();
@@ -78,31 +70,31 @@ dequeue_task_idle(struct rq *rq, struct task_struct *p, int flags)
  */
 static void task_tick_idle(struct rq *rq, struct task_struct *curr, int queued)
 {
-	printk(KERN_DEBUG "wrr:static void task_tick_idle\n");
+//	printk(KERN_DEBUG "wrr:static void task_tick_idle\n");
 }
 
 static void switched_to_idle(struct rq *rq, struct task_struct *p)
 {
-	printk(KERN_DEBUG "wrr:static void switched_to_idle\n");
+//	printk(KERN_DEBUG "wrr:static void switched_to_idle\n");
 	BUG();
 }
 
 static void
 prio_changed_idle(struct rq *rq, struct task_struct *p, int oldprio)
 {
-	printk(KERN_DEBUG "wrr:prio_changed_idle\n");
+//	printk(KERN_DEBUG "wrr:prio_changed_idle\n");
 	BUG();
 }
 
 static unsigned int get_rr_interval_idle(struct rq *rq, struct task_struct *task)
 {
-	printk(KERN_DEBUG "wrr:get_rr_interval_idle\n");
+//	printk(KERN_DEBUG "wrr:get_rr_interval_idle\n");
 	return 0;
 }
 
 static void update_curr_idle(struct rq *rq)
 {
-	printk(KERN_DEBUG "wrr:update_curr_idle\n");
+//	printk(KERN_DEBUG "wrr:update_curr_idle\n");
 }
 
 const struct sched_class wrr_sched_class = {
