@@ -2,6 +2,7 @@
 
 #include <trace/events/power.h>
 #include <linux/printk.h>
+#include <linux/list.h>
 
 #ifdef CONFIG_SMP
 static int
@@ -44,6 +45,27 @@ static struct task_struct *
 pick_next_task_idle(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 {
 	return NULL;
+}
+
+static void
+enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
+{
+	struct wrr_rq wrr_rq;
+	struct sched_wrr_entity wrr_se, *curr;
+
+	wrr_rq = rq->wrr;
+	wrr_se = p->wrr;
+
+	if (wrr_rq.nr_task == 0) {
+		INIT_LIST_HEAD(&wrr_se.entry);
+		wrr_rq.curr = &wrr_se;
+	} else {
+		/* wrr_rq is not empty: enqueue task before head */
+		curr = wrr_rq.curr;
+		__list_add(&wrr_se.entry, curr->entry.prev, &curr->entry);
+	}
+
+	wrr_rq.nr_task++;
 }
 
 /*
@@ -101,6 +123,7 @@ const struct sched_class wrr_sched_class = {
 	.next			= &fair_sched_class,
 	/* no enqueue/yield_task for idle tasks */
 
+	.enqueue_task		= enqueue_task_wrr,
 	/* dequeue is not valid, we print a debug message there: */
 	.dequeue_task		= dequeue_task_idle,
 
