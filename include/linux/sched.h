@@ -566,12 +566,16 @@ struct sched_dl_entity {
 };
 
 struct wrr_rq {
+	unsigned int total_weight;
+	struct rq *rq;
+	struct sched_wrr_entity *curr;
+	int nr_task;
 };
 
 struct sched_wrr_entity {
-	struct list_head 	run_list;
-	struct wrr_rq		*wrr_rq;
-	unsigned int 		time_slice;
+	struct list_head entry;
+	unsigned int time_slice;
+	unsigned int weight;
 };
 
 #ifdef CONFIG_UCLAMP_TASK
