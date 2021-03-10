@@ -2863,6 +2863,10 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 			p->policy = SCHED_NORMAL;
 			p->static_prio = NICE_TO_PRIO(0);
 			p->rt_priority = 0;
+		} else if (task_has_wrr_policy(p)){
+			p->policy = SCHED_WRR;
+			p->static_prio = NICE_TO_PRIO(0);
+			p->rt_priority = 0;
 		} else if (PRIO_TO_NICE(p->static_prio) < 0)
 			p->static_prio = NICE_TO_PRIO(0);
 
@@ -2880,6 +2884,8 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 		return -EAGAIN;
 	else if (rt_prio(p->prio))
 		p->sched_class = &rt_sched_class;
+	else if (task_has_wrr_policy(p))
+		p->sched_class = &wrr_sched_class;
 	else
 		p->sched_class = &fair_sched_class;
 
