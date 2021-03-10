@@ -4723,7 +4723,10 @@ static void __setscheduler(struct rq *rq, struct task_struct *p,
 	if (keep_boost)
 		p->prio = rt_effective_prio(p, p->prio);
 
-	if (dl_prio(p->prio))
+	/* p->static_prio will be 100 */
+	if (policy == SCHED_WRR)
+		p->sched_class = &wrr_sched_class;
+	else if (dl_prio(p->prio))
 		p->sched_class = &dl_sched_class;
 	else if (rt_prio(p->prio))
 		p->sched_class = &rt_sched_class;
