@@ -2,13 +2,25 @@
 
 #include <trace/events/power.h>
 #include <linux/printk.h>
+#include <linux/cpumask.h> 
+#include <linux/limits.h>
 
 #ifdef CONFIG_SMP
 static int
-select_task_rq_idle(struct task_struct *p, int cpu, int sd_flag, int flags)
+select_task_rq_wrr(struct task_struct *p, int cpu, int sd_flag, int flags)
 {
-//	printk(KERN_DEBUG "wrr:select_task_rq_idle\n");
-	return task_cpu(p); /* IDLE tasks as never migrated */
+	/* returns the cpu with the lowest total_weight */
+	struct rq *rq;
+	int min_weight = INT_MAX, min_cpu = -1;
+
+	for_each_possible_cpu(cpu){
+		rq = cpu_rq(cpu);
+		if(rq->wrr.total_weight < min_weight){
+			min_weight = rq->wrr.total_weight;
+			min_cpu = cpu;
+		}
+	}
+	return min_cpu;
 }
 
 static int
@@ -112,7 +124,7 @@ const struct sched_class wrr_sched_class = {
 
 #ifdef CONFIG_SMP
 	.balance		= balance_idle,
-	.select_task_rq		= select_task_rq_idle,
+	.select_task_rq		= select_task_rq_wrr,
 	.set_cpus_allowed	= set_cpus_allowed_common,
 #endif
 
