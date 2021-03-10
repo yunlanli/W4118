@@ -41,9 +41,24 @@ static void set_next_task_idle(struct rq *rq, struct task_struct *next)
 }
 
 static struct task_struct *
-pick_next_task_idle(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
+pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 {
-	return NULL;
+	struct task_struct *p;
+	struct wrr_rq *wrr_rq;
+	struct sched_wrr_entity *wrr_se;
+
+	wrr_rq = &rq->wrr;
+
+	if (wrr_rq->nr_task == 0)
+		return NULL;
+
+	/* has runnable tasks */
+	wrr_se = wrr_rq->curr;
+	p = container_of(wrr_se, struct task_struct, wrr);
+
+	wrr_rq->curr = list_next_entry(wrr_se, entry);
+
+	return p;
 }
 
 /*
@@ -106,7 +121,7 @@ const struct sched_class wrr_sched_class = {
 
 	.check_preempt_curr	= check_preempt_curr_idle,
 
-	.pick_next_task		= pick_next_task_idle,
+	.pick_next_task		= pick_next_task_wrr,
 	.put_prev_task		= put_prev_task_idle,
 	.set_next_task          = set_next_task_idle,
 
