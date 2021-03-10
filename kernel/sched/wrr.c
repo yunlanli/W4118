@@ -50,22 +50,22 @@ pick_next_task_idle(struct rq *rq, struct task_struct *prev, struct rq_flags *rf
 static void
 enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
-	struct wrr_rq wrr_rq;
-	struct sched_wrr_entity wrr_se, *curr;
+	struct wrr_rq *wrr_rq;
+	struct sched_wrr_entity *wrr_se, *curr;
 
-	wrr_rq = rq->wrr;
-	wrr_se = p->wrr;
+	wrr_rq = &rq->wrr;
+	wrr_se = &p->wrr;
 
-	if (wrr_rq.nr_task == 0) {
-		INIT_LIST_HEAD(&wrr_se.entry);
-		wrr_rq.curr = &wrr_se;
+	if (wrr_rq->nr_task == 0) {
+		INIT_LIST_HEAD(&wrr_se->entry);
+		wrr_rq->curr = wrr_se;
 	} else {
 		/* wrr_rq is not empty: enqueue task before head */
-		curr = wrr_rq.curr;
-		__list_add(&wrr_se.entry, curr->entry.prev, &curr->entry);
+		curr = wrr_rq->curr;
+		__list_add(&wrr_se->entry, curr->entry.prev, &curr->entry);
 	}
 
-	wrr_rq.nr_task++;
+	wrr_rq->nr_task++;
 }
 
 /*
