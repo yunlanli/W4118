@@ -12,7 +12,7 @@ LDLIBS =
 all: clean tmp
 
 .PHONY: tmp
-tmp: tmp/Makefile tmp/syscall_test.c
+tmp: tmp/Makefile tmp/syscall_test.c tmp/setscheduler_test.c
 	cd tmp && make
 
 .PHONY: clean
