@@ -118,6 +118,7 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 
 	wrr_rq = &rq->wrr;
 
+	printk(KERN_INFO "Inside [dequeue_task_rq_wrr]\n");
 
 	if (wrr_rq->nr_task == 0)
 		return;
@@ -127,6 +128,8 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	__list_del(curr->entry.prev, curr->entry.next);
 
 	wrr_rq->nr_task--;
+
+	printk(KERN_INFO "[dequeue_task_rq_wrr] dequeued task\n");
 }
 
 /*
