@@ -14,6 +14,8 @@ select_task_rq_wrr(struct task_struct *p, int cpu, int sd_flag, int flags)
 	struct rq *rq;
 	int min_weight = INT_MAX, min_cpu = -1;
 
+	printk(KERN_INFO "Inside [select_task_rq_wrr]\n");
+
 	for_each_possible_cpu(cpu){
 		rq = cpu_rq(cpu);
 		if(rq->wrr.total_weight < min_weight){
@@ -21,6 +23,7 @@ select_task_rq_wrr(struct task_struct *p, int cpu, int sd_flag, int flags)
 			min_cpu = cpu;
 		}
 	}
+	printk(KERN_INFO "[select_task_rq_wrr] min_weight=%d, min_cpu = %d\n", min_weight, min_cpu);
 	return min_cpu;
 }
 
@@ -60,6 +63,7 @@ pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	struct wrr_rq *wrr_rq;
 	struct sched_wrr_entity *wrr_se;
 
+	printk(KERN_INFO "Inside [pick_next_task]\n");
 	wrr_rq = &rq->wrr;
 
 	if (wrr_rq->nr_task == 0)
@@ -70,6 +74,8 @@ pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	p = container_of(wrr_se, struct task_struct, wrr);
 
 	wrr_rq->curr = list_next_entry(wrr_se, entry);
+	
+	printk(KERN_INFO "[pick_next_task] picked %s\n", p->comm);
 
 	return p;
 }
@@ -79,6 +85,8 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct wrr_rq *wrr_rq;
 	struct sched_wrr_entity *wrr_se, *curr;
+	
+	printk(KERN_INFO "Inside [enqueue_task_wrr]\n");
 
 	wrr_rq = &rq->wrr;
 	wrr_se = &p->wrr;
@@ -91,6 +99,8 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 		curr = wrr_rq->curr;
 		__list_add(&wrr_se->entry, curr->entry.prev, &curr->entry);
 	}
+	
+	printk(KERN_INFO "[enqueue_task_wrr] added %s\n", p->comm);
 
 	wrr_rq->nr_task++;
 }
