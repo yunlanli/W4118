@@ -63,13 +63,14 @@ pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	struct wrr_rq *wrr_rq;
 	struct sched_wrr_entity *wrr_se;
 
-	printk(KERN_INFO "Inside [pick_next_task]\n");
 	wrr_rq = &rq->wrr;
 
 	if (wrr_rq->nr_task == 0)
 		return NULL;
 
 	/* has runnable tasks */
+	printk(KERN_INFO "Inside [pick_next_task]\n");
+
 	wrr_se = wrr_rq->curr;
 	p = container_of(wrr_se, struct task_struct, wrr);
 
@@ -134,8 +135,7 @@ static void task_tick_idle(struct rq *rq, struct task_struct *curr, int queued)
 
 static void switched_to_idle(struct rq *rq, struct task_struct *p)
 {
-//	printk(KERN_DEBUG "wrr:static void switched_to_idle\n");
-	BUG();
+	/* DELETED BUG() */
 }
 
 static void
