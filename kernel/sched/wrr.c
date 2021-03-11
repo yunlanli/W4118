@@ -111,13 +111,22 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
  * message if some code attempts to do it:
  */
 static void
-dequeue_task_idle(struct rq *rq, struct task_struct *p, int flags)
+dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
-//	printk(KERN_DEBUG "wrr:dequeue_task_idle\n");
-	raw_spin_unlock_irq(&rq->lock);
-	printk(KERN_ERR "bad scheduling from wrr class\n");
-	dump_stack();
-	raw_spin_lock_irq(&rq->lock);
+	struct wrr_rq *wrr_rq;
+	struct sched_wrr_entity *curr;
+
+	wrr_rq = &rq->wrr;
+
+
+	if (wrr_rq->nr_task == 0)
+		return;
+
+	/* wrr_rq is not empty */
+	curr = wrr_rq->curr;
+	__list_del(curr->entry.prev, curr->entry.next);
+
+	wrr_rq->nr_task--;
 }
 
 /*
@@ -161,7 +170,7 @@ const struct sched_class wrr_sched_class = {
 
 	.enqueue_task		= enqueue_task_wrr,
 	/* dequeue is not valid, we print a debug message there: */
-	.dequeue_task		= dequeue_task_idle,
+	.dequeue_task		= dequeue_task_wrr,
 
 	.check_preempt_curr	= check_preempt_curr_idle,
 
