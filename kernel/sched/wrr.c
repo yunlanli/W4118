@@ -141,8 +141,7 @@ static void switched_to_idle(struct rq *rq, struct task_struct *p)
 static void
 prio_changed_idle(struct rq *rq, struct task_struct *p, int oldprio)
 {
-//	printk(KERN_DEBUG "wrr:prio_changed_idle\n");
-	BUG();
+	/* DELETED BUG() */
 }
 
 static unsigned int get_rr_interval_idle(struct rq *rq, struct task_struct *task)
