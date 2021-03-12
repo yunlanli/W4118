@@ -77,9 +77,8 @@ pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	wrr_se = wrr_rq->curr;
 	wrr_rq->curr = list_next_entry(wrr_se, entry);
 	
-	printk(KERN_INFO "[pick_next_task] picked %s\n", p->comm);
-
 	p = container_of(wrr_se, struct task_struct, wrr);
+	printk(KERN_INFO "[pick_next_task] picked %s\n", p->comm);
 	p->se.exec_start = rq_clock_task(rq);
 
 	return p;
@@ -104,6 +103,13 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 		curr = wrr_rq->curr;
 		__list_add(&wrr_se->entry, curr->entry.prev, &curr->entry);
 	}
+
+	/* start of temporary code */
+	if (wrr_se->weight == 0) {
+		wrr_se->weight = 1;
+	}
+	wrr_se->time_slice = wrr_se->weight * WRR_BASE_TIME;
+	/* end of temporary code */
 	
 	printk(KERN_INFO "[enqueue_task_wrr] added %s\n", p->comm);
 
