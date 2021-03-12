@@ -167,6 +167,12 @@ static void update_curr_idle(struct rq *rq)
 {
 //	printk(KERN_DEBUG "wrr:update_curr_idle\n");
 }
+void init_wrr_rq(struct wrr_rq* wrr_rq)
+{
+	wrr_rq->total_weight = 0;
+	wrr_rq->nr_task = 0;
+	wrr_rq->curr = NULL;
+}
 
 const struct sched_class wrr_sched_class = {
 	.next			= &fair_sched_class,
