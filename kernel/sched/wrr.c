@@ -66,6 +66,7 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	}
 
 	wrr_rq->nr_task++;
+	wrr_rq->total_weight += wrr_se->weight;
 }
 
 /*
