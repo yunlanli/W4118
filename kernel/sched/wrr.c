@@ -67,6 +67,7 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	__list_del(curr->entry.prev, curr->entry.next);
 
 	wrr_rq->nr_task--;
+	wrr_rq->total_weight -= curr->weight;
 }
 
 /*
