@@ -72,11 +72,12 @@ pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	printk(KERN_INFO "Inside [pick_next_task]\n");
 
 	wrr_se = wrr_rq->curr;
-	p = container_of(wrr_se, struct task_struct, wrr);
-
 	wrr_rq->curr = list_next_entry(wrr_se, entry);
 	
 	printk(KERN_INFO "[pick_next_task] picked %s\n", p->comm);
+
+	p = container_of(wrr_se, struct task_struct, wrr);
+	p->se.exec_start = rq_clock_task(rq);
 
 	return p;
 }
