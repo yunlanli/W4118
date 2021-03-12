@@ -104,6 +104,7 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	printk(KERN_INFO "[enqueue_task_wrr] added %s\n", p->comm);
 
 	wrr_rq->nr_task++;
+	wrr_rq->total_weight += wrr_se->weight;
 }
 
 /*
