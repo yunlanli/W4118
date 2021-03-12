@@ -574,7 +574,7 @@ struct wrr_rq {
 
 struct sched_wrr_entity {
 	struct list_head entry;
-	unsigned int time_slice;
+	u64 time_slice;
 	unsigned int weight;
 };
 

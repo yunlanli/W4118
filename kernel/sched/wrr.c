@@ -3,6 +3,9 @@
 #include <trace/events/power.h>
 #include <linux/printk.h>
 
+#define MSECS 1000000 /* msec to nanosec */
+#define WRR_BASE_TIME (10 * MSECS)
+
 #ifdef CONFIG_SMP
 static int
 select_task_rq_idle(struct task_struct *p, int cpu, int sd_flag, int flags)
@@ -68,9 +71,23 @@ dequeue_task_idle(struct rq *rq, struct task_struct *p, int flags)
  * and everything must be accessed through the @rq and @curr passed in
  * parameters.
  */
-static void task_tick_idle(struct rq *rq, struct task_struct *curr, int queued)
+static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 {
-//	printk(KERN_DEBUG "wrr:static void task_tick_idle\n");
+	struct sched_wrr_entity *curr = &p->wrr;
+	u64 now, delta_exec;
+
+	now = rq_clock_task(rq);
+	delta_exec = now - p->se.exec_start;
+
+	printk(KERN_DEBUG "[task_tick_wrr] %s delta_exec: %llu, time slice: %llu\n",
+			p->comm, delta_exec, curr->time_slice);
+
+	/* if time is not up, return */
+	if(delta_exec < curr->time_slice)
+		return;
+
+	curr->time_slice = curr->weight * WRR_BASE_TIME;
+	resched_curr(rq);
 }
 
 static void switched_to_idle(struct rq *rq, struct task_struct *p)
@@ -116,7 +133,7 @@ const struct sched_class wrr_sched_class = {
 	.set_cpus_allowed	= set_cpus_allowed_common,
 #endif
 
-	.task_tick		= task_tick_idle,
+	.task_tick		= task_tick_wrr,
 
 	.get_rr_interval	= get_rr_interval_idle,
 
