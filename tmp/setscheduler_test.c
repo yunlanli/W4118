@@ -70,5 +70,10 @@ int main()
 		do_some_work();
 	}
 #endif
+
+#ifdef test_tt
+	fprintf(stderr, "entering infinite loop...\n");
+	while(1) ;
+#endif
 	return 0;
 }
