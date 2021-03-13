@@ -22,7 +22,7 @@ static inline void set_invalid_weight(void)
 
 	weight = -1;
 	ret = syscall(__SET_WRR_WEIGHT, weight);
-	if (ret == -EINVAL)
+	if (errno == EINVAL)
 		fprintf(stderr, "[ success ] denied request to set weight < 1\n");
 	else
 		fprintf(stderr, "[ failure ] set_wrr_weight(-1) returned %d "
@@ -35,10 +35,10 @@ static inline void set_weight_above_ten(void)
 	int ret, weight;
 	weight = 20;
 	ret = syscall(__SET_WRR_WEIGHT, weight);
-	if (ret == -EPERM)
+	if (errno == EPERM)
 		fprintf(stderr, "[ success ] denied request to set weight > 10"
 				" from a non-root user\n");
-	else
+	else if (ret)
 		fprintf(stderr, "[ failure ] set_wrr_weight(20) returned %d "
 				"with error: %s\n",
 				ret, strerror(errno));
@@ -56,11 +56,12 @@ static inline void set_weight(int weight)
 static inline void get_wrr_info(void)
 {
 	int i, ret;
-	struct wrr_info buf;
+	struct wrr_info *buf;
+	buf = malloc(sizeof(struct wrr_info));
 
-	ret = syscall(__GET_WRR_INFO, &buf);
-	if (ret) {
-		fprintf(stderr, "error: %s\n", strerror(errno));
+	ret = syscall(__GET_WRR_INFO, buf);
+	if (ret < 0) {
+		fprintf(stderr, "[ failure ] error: %s returned %d\n", strerror(errno), ret);
 		exit(1);
 	}
 	fprintf(stderr, "[ success ] num_cpus: %d\n", ret);
@@ -69,7 +70,7 @@ static inline void get_wrr_info(void)
 		fprintf(stderr, "[ info ] cpu_%d	"
 				"nr_running: %d		"
 				"total_weight %d\n",
-				i, buf.nr_running[i], buf.total_weight[i]);
+				i, buf->nr_running[i], buf->total_weight[i]);
 }
 
 int main()
