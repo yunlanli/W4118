@@ -5310,11 +5310,59 @@ struct wrr_info {
 
 SYSCALL_DEFINE1(get_wrr_info, struct wrr_info __user *, buf)
 {
-	return 0;
+	int cpu, cnt;
+	struct wrr_info kbuf;
+	struct wrr_rq *wrr_rq;
+	struct rq *rq;
+	struct rq_flags rf;
+
+	cnt = 0;
+
+	for_each_possible_cpu(cpu){
+		rq = cpu_rq(cpu);
+		rq_lock_irq(rq, &rf);
+
+			wrr_rq = &rq->wrr;
+		kbuf.nr_running[cnt] = wrr_rq->nr_task;
+		kbuf.total_weight[cnt] = wrr_rq->total_weight;
+		cnt++;
+
+		rq_unlock_irq(rq, &rf);
+
+		if (cnt == MAX_CPUS)
+			break;
+	}
+
+	kbuf.num_cpus = cnt;
+
+	if (copy_to_user(buf, &kbuf, sizeof(kbuf)))
+		return -EFAULT;
+
+	return cnt;
 }
 
 SYSCALL_DEFINE1(set_wrr_weight, int, weight)
 {
+	struct rq *rq;
+	struct rq_flags rf;
+
+
+	if (weight < 1)
+		return -EINVAL;
+
+	if (uid_eq(current_uid(), GLOBAL_ROOT_UID))
+		goto root;
+
+	/* non-root user */
+	if (weight > 10)
+		return -EPERM;
+
+root:
+	rq = task_rq_lock(current, &rf);
+	rq->wrr.total_weight += weight - current->wrr.weight;
+	current->wrr.weight = weight;
+	task_rq_unlock(rq, current, &rf);
+  
 	return 0;
 }
 
