@@ -44,7 +44,7 @@ balance_idle(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 static void check_preempt_curr_idle(struct rq *rq, struct task_struct *p, int flags)
 {
 //	printk(KERN_DEBUG "wrr:check_preempt_curr_idle\n");
-	resched_curr(rq);
+//	resched_curr(rq);
 }
 
 static void put_prev_task_idle(struct rq *rq, struct task_struct *prev)
@@ -71,9 +71,9 @@ pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	if (wrr_rq->nr_task == 0)
 		return NULL;
 
-	/* has runnable tasks */
 	printk(KERN_INFO "Inside [pick_next_task]\n");
 
+	/* has runnable tasks */
 	wrr_se = wrr_rq->curr;
 	wrr_rq->curr = list_next_entry(wrr_se, entry);
 	
@@ -129,10 +129,10 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 
 	wrr_rq = &rq->wrr;
 
-	printk(KERN_INFO "Inside [dequeue_task_rq_wrr]\n");
-
 	if (wrr_rq->nr_task == 0)
 		return;
+
+	printk(KERN_INFO "Inside [dequeue_task_rq_wrr]\n");
 
 	/* wrr_rq is not empty */
 	curr = wrr_rq->curr;
@@ -160,13 +160,17 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 	now = rq_clock_task(rq);
 	delta_exec = now - p->se.exec_start;
 
-	printk(KERN_DEBUG "[task_tick_wrr] %s delta_exec: %llu, time slice: %llu\n",
-			p->comm, delta_exec, curr->time_slice);
+	printk(KERN_DEBUG "[task_tick_wrr] %s remain: %llu, "
+			"start: %llu, time slice: %llu\n",
+			p->comm, curr->time_slice - delta_exec,
+			p->se.exec_start, curr->time_slice);
 
 	/* if time is not up, return */
 	if(delta_exec < curr->time_slice)
 		return;
 
+	printk(KERN_DEBUG "rescheduling %s\n", p->comm);
+	
 	curr->time_slice = curr->weight * WRR_BASE_TIME;
 	resched_curr(rq);
 }
