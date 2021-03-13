@@ -5337,6 +5337,8 @@ SYSCALL_DEFINE1(set_wrr_weight, int, weight)
 	struct rq *rq;
 	struct rq_flags rf;
 
+	if (!task_has_wrr_policy(current))
+		return -EPERM;
 
 	if (weight < 1)
 		return -EINVAL;
@@ -5346,7 +5348,7 @@ SYSCALL_DEFINE1(set_wrr_weight, int, weight)
 
 	/* non-root user */
 	if (weight > 10)
-		return -EPERM;
+		return -EACCES;
 
 root:
 	rq = task_rq_lock(current, &rf);
