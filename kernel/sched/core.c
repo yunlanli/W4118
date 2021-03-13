@@ -5334,6 +5334,26 @@ SYSCALL_DEFINE1(get_wrr_info, struct wrr_info __user *, buf)
 
 SYSCALL_DEFINE1(set_wrr_weight, int, weight)
 {
+	struct rq *rq;
+	struct rq_flags rf;
+
+
+	if (weight < 1)
+		return -EINVAL;
+
+	if (uid_eq(current_uid(), GLOBAL_ROOT_UID))
+		goto root;
+
+	/* non-root user */
+	if (weight > 10)
+		return -EPERM;
+
+root:
+	rq = task_rq_lock(current, &rf);
+	rq->wrr.total_weight += weight - current->wrr.weight;
+	current->wrr.weight = weight;
+	task_rq_unlock(rq, current, &rf);
+  
 	return 0;
 }
 
