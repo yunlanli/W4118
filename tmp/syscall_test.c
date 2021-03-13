@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <sched.h>
 
 #define MAX_CPUS		8
 
@@ -73,8 +74,27 @@ static inline void get_wrr_info(void)
 				i, buf->nr_running[i], buf->total_weight[i]);
 }
 
+#define SCHED_WRR 7
+#define __SCHED_SETSCHEDULER 144
+static inline void set_sched_policy(int policy)
+{
+	pid_t mypid;
+	struct sched_param param;
+
+	/* initialize parameters for sched_setscheduler call */
+	mypid = getpid();
+	param.sched_priority = 0;
+
+	printf("Setting process %d to use wrr_sched_class...\n", mypid);
+	if (syscall(__SCHED_SETSCHEDULER, mypid, policy, &param)) {
+		fprintf(stderr, "error: %s\n", strerror(errno));
+		exit(-1);
+	}
+}
+
 int main()
 {
+	set_sched_policy(SCHED_WRR);
 	set_invalid_weight();
 	set_weight_above_ten();
 	set_weight(5);
