@@ -7,7 +7,9 @@
 #include <sched.h>
 
 #define MAX_CPUS		8
+#define SCHED_WRR		7
 
+#define __SCHED_SETSCHEDULER	144
 #define __GET_WRR_INFO		436
 #define __SET_WRR_WEIGHT	437
 
@@ -36,7 +38,7 @@ static inline void set_weight_above_ten(void)
 	int ret, weight;
 	weight = 20;
 	ret = syscall(__SET_WRR_WEIGHT, weight);
-	if (errno == EPERM)
+	if (errno == EACCES)
 		fprintf(stderr, "[ success ] denied request to set weight > 10"
 				" from a non-root user\n");
 	else if (ret)
@@ -50,8 +52,13 @@ static inline void set_weight(int weight)
 	int ret;
 
 	ret = syscall(__SET_WRR_WEIGHT, weight);
-	if (ret)
+	if (ret && errno == EPERM)
+		fprintf(stderr, "[ failure ] can't set wrr_weight on a process "
+				"not using SCHED_WRR policy\n");
+	else if (ret)
 		fprintf(stderr, "[ failure ] %s\n", strerror(errno));
+
+	fprintf(stderr, "[ success ] set pid %d's wrr_weight to %d\n", getpid(), weight);
 }
 
 static inline void get_wrr_info(void)
@@ -74,8 +81,6 @@ static inline void get_wrr_info(void)
 				i, buf->nr_running[i], buf->total_weight[i]);
 }
 
-#define SCHED_WRR 7
-#define __SCHED_SETSCHEDULER 144
 static inline void set_sched_policy(int policy)
 {
 	pid_t mypid;
@@ -85,15 +90,18 @@ static inline void set_sched_policy(int policy)
 	mypid = getpid();
 	param.sched_priority = 0;
 
-	printf("Setting process %d to use wrr_sched_class...\n", mypid);
+	printf("[ info ] Setting process %d to use wrr_sched_class...\n", mypid);
 	if (syscall(__SCHED_SETSCHEDULER, mypid, policy, &param)) {
-		fprintf(stderr, "error: %s\n", strerror(errno));
+		fprintf(stderr, "[ failure ] error: %s\n", strerror(errno));
 		exit(-1);
 	}
+	printf("[ success ] pid %d set to use policy %d\n", mypid, policy);
 }
 
 int main()
 {
+	get_wrr_info();
+
 	set_sched_policy(SCHED_WRR);
 	set_invalid_weight();
 	set_weight_above_ten();
