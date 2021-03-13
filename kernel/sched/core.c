@@ -5302,7 +5302,7 @@ struct wrr_info {
 SYSCALL_DEFINE1(get_wrr_info, struct wrr_info __user *, buf)
 {
 	int cpu, cnt;
-	struct wrr_info kinfo;
+	struct wrr_info kbuf;
 	struct wrr_rq *wrr_rq;
 	struct rq *rq;
 	struct rq_flags rf;
@@ -5314,8 +5314,8 @@ SYSCALL_DEFINE1(get_wrr_info, struct wrr_info __user *, buf)
 		rq_lock_irq(rq, &rf);
 
 			wrr_rq = &rq->wrr;
-		kinfo.nr_running[cnt] = wrr_rq->nr_task;
-		kinfo.total_weight[cnt] = wrr_rq->total_weight;
+		kbuf.nr_running[cnt] = wrr_rq->nr_task;
+		kbuf.total_weight[cnt] = wrr_rq->total_weight;
 		cnt++;
 
 		rq_unlock_irq(rq, &rf);
@@ -5324,9 +5324,9 @@ SYSCALL_DEFINE1(get_wrr_info, struct wrr_info __user *, buf)
 			break;
 	}
 
-	kinfo.num_cpus = cnt;
+	kbuf.num_cpus = cnt;
 
-	if (copy_to_user(wrr_info, &kinfo, sizeof(kinfo)))
+	if (copy_to_user(buf, &kbuf, sizeof(kbuf)))
 		return -EFAULT;
 
 	return cnt;
