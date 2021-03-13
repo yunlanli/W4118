@@ -5346,8 +5346,7 @@ SYSCALL_DEFINE1(set_wrr_weight, int, weight)
 	struct rq *rq;
 	struct rq_flags rf;
 
-	if (!task_has_wrr_policy(current))
-		return -EPERM;
+
 
 	if (weight < 1)
 		return -EINVAL;
@@ -5359,9 +5358,12 @@ SYSCALL_DEFINE1(set_wrr_weight, int, weight)
 	if (weight > 10)
 		return -EACCES;
 
+
 root:
 	rq = task_rq_lock(current, &rf);
-	rq->wrr.total_weight += weight - current->wrr.weight;
+	if (task_has_wrr_policy(current))
+		rq->wrr.total_weight += weight - current->wrr.weight;
+
 	current->wrr.weight = weight;
 	task_rq_unlock(rq, current, &rf);
   
