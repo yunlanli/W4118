@@ -30,33 +30,32 @@ select_task_rq_wrr(struct task_struct *p, int cpu, int sd_flag, int flags)
 	return min_cpu;
 }
 
+/*
+ * called in pick_next_task before per class pick_next_task is called
+ */
 static int
-balance_idle(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
+balance_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 {
-//	printk(KERN_DEBUG "wrr:balance_idle\n");
 	return 0;
 }
 #endif
 
 /*
- * Idle tasks are unconditionally rescheduled:
+ * gets called when the new ready process and the current running
+ * process both uses wrr scheduling class.
+ *
+ * wrr is non-preemptive -> no-op
  */
-static void check_preempt_curr_idle(struct rq *rq, struct task_struct *p, int flags)
+static void check_preempt_curr_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
-//	printk(KERN_DEBUG "wrr:check_preempt_curr_idle\n");
-//	resched_curr(rq);
 }
 
-static void put_prev_task_idle(struct rq *rq, struct task_struct *prev)
+static void put_prev_task_wrr(struct rq *rq, struct task_struct *prev)
 {
-//	printk(KERN_DEBUG "wrr:put_prev_task_idle\n");
 }
 
-static void set_next_task_idle(struct rq *rq, struct task_struct *next)
+static void set_next_task_wrr(struct rq *rq, struct task_struct *next)
 {
-//	printk(KERN_DEBUG "wrr:set_next_task_idle\n");
-	update_idle_core(rq);
-	schedstat_inc(rq->sched_goidle);
 }
 
 static struct task_struct *
@@ -175,27 +174,22 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 	resched_curr(rq);
 }
 
-static void switched_to_idle(struct rq *rq, struct task_struct *p)
+static void switched_to_wrr(struct rq *rq, struct task_struct *p)
 {
-	/* DELETED BUG() */
 }
 
 static void
-prio_changed_idle(struct rq *rq, struct task_struct *p, int oldprio)
+prio_changed_wrr(struct rq *rq, struct task_struct *p, int oldprio)
 {
-	/* DELETED BUG() */
 }
 
-static unsigned int get_rr_interval_idle(struct rq *rq, struct task_struct *task)
+/*
+ * called by task_sched_runtime
+ */
+static void update_curr_wrr(struct rq *rq)
 {
-//	printk(KERN_DEBUG "wrr:get_rr_interval_idle\n");
-	return 0;
 }
 
-static void update_curr_idle(struct rq *rq)
-{
-//	printk(KERN_DEBUG "wrr:update_curr_idle\n");
-}
 void init_wrr_rq(struct wrr_rq* wrr_rq)
 {
 	wrr_rq->total_weight = 0;
@@ -211,23 +205,21 @@ const struct sched_class wrr_sched_class = {
 	/* dequeue is not valid, we print a debug message there: */
 	.dequeue_task		= dequeue_task_wrr,
 
-	.check_preempt_curr	= check_preempt_curr_idle,
+	.check_preempt_curr	= check_preempt_curr_wrr,
 
 	.pick_next_task		= pick_next_task_wrr,
-	.put_prev_task		= put_prev_task_idle,
-	.set_next_task          = set_next_task_idle,
+	.put_prev_task		= put_prev_task_wrr,
+	.set_next_task          = set_next_task_wrr,
 
 #ifdef CONFIG_SMP
-	.balance		= balance_idle,
+	.balance		= balance_wrr,
 	.select_task_rq		= select_task_rq_wrr,
 	.set_cpus_allowed	= set_cpus_allowed_common,
 #endif
 
 	.task_tick		= task_tick_wrr,
 
-	.get_rr_interval	= get_rr_interval_idle,
-
-	.prio_changed		= prio_changed_idle,
-	.switched_to		= switched_to_idle,
-	.update_curr		= update_curr_idle,
+	.prio_changed		= prio_changed_wrr,
+	.switched_to		= switched_to_wrr,
+	.update_curr		= update_curr_wrr,
 };
