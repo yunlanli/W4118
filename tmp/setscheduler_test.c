@@ -71,9 +71,20 @@ int main()
 	}
 #endif
 
-#ifdef test_tt
-	fprintf(stderr, "entering infinite loop...\n");
-	while(1) ;
+#ifdef test_ttnb
+	fprintf(stderr, "entering finite blocking and waking loop...\n");
+	while(1)
+		;
+#endif
+
+#ifdef test_ttb
+	fprintf(stderr, "entering finite blocking and waking loop...\n");
+	int k = 100;
+	while(--k > 0){
+		printf("sleeping\n");
+		sleep(2);
+		printf("waking up\n");
+	}
 #endif
 	return 0;
 }
