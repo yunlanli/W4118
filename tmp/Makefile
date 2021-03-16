@@ -9,9 +9,11 @@ LDFLAGS =
 LDLIBS = 
 
 .PHONY: all
-all: clean syscall_test wrr1_test setscheduler_test setwrr
+all: clean syscall_test wrr1_test setscheduler_test setwrr setwrr2
 
 setwrr: setwrr.c
+
+setwrr2: setwrr2.c
 
 syscall_test: syscall_test.c
 
@@ -21,7 +23,7 @@ setscheduler_test: setscheduler_test.c
 
 .PHONY: clean
 clean:
-		rm -f *.o *~ syscall_test wrr1_test setscheduler_test setwrr
+		rm -f *.o *~ syscall_test wrr1_test setscheduler_test setwrr setwrr2
 
 
 
