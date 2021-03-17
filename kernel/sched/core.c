@@ -4013,6 +4013,9 @@ static void __sched notrace __schedule(bool preempt)
 	rq = cpu_rq(cpu);
 	prev = rq->curr;
 
+	if (task_has_wrr_policy(prev)) {
+		printk(KERN_DEBUG "[__schedule] prev=%s\n", prev->comm);
+	}
 	schedule_debug(prev, preempt);
 
 	if (sched_feat(HRTICK))
@@ -4035,6 +4038,10 @@ static void __sched notrace __schedule(bool preempt)
 	/* Promote REQ to ACT */
 	rq->clock_update_flags <<= 1;
 	update_rq_clock(rq);
+	
+	if (task_has_wrr_policy(prev)) {
+		printk(KERN_DEBUG "[__schedule] !preempt=%d && prev->state = %ld\n", !preempt, prev->state);
+	}
 
 	switch_count = &prev->nivcsw;
 	if (!preempt && prev->state) {
@@ -4055,6 +4062,9 @@ static void __sched notrace __schedule(bool preempt)
 	clear_tsk_need_resched(prev);
 	clear_preempt_need_resched();
 
+	if (task_has_wrr_policy(prev)) {
+		printk(KERN_DEBUG "[__schedule] !prev=%s, next=%s\n", prev->comm, next->comm);
+	}
 	if (likely(prev != next)) {
 		rq->nr_switches++;
 		/*
@@ -4081,6 +4091,9 @@ static void __sched notrace __schedule(bool preempt)
 		trace_sched_switch(preempt, prev, next);
 
 		/* Also unlocks the rq: */
+		if (task_has_wrr_policy(next)) {
+			printk(KERN_DEBUG "[__schedule] context switch to %s\n", next->comm);
+		}
 		rq = context_switch(rq, prev, next, &rf);
 	} else {
 		rq->clock_update_flags &= ~(RQCF_ACT_SKIP|RQCF_REQ_SKIP);
