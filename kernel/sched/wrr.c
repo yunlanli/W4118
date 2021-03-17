@@ -110,10 +110,12 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	wrr_se->time_slice = wrr_se->weight * WRR_BASE_TIME;
 	/* end of temporary code */
 	
-	printk(KERN_INFO "[enqueue_task_wrr] added %s\n", p->comm);
+	printk(KERN_INFO "[enqueue_task_wrr] added %s %d state: %ld, on_rq: %d, rq_weight: %d\n",
+			p->comm, p->pid, p->state, p->on_rq, wrr_rq->total_weight);
 
 	wrr_rq->nr_task++;
 	wrr_rq->total_weight += wrr_se->weight;
+	add_nr_running(rq,1);
 }
 
 /*
@@ -131,16 +133,17 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	if (wrr_rq->nr_task == 0)
 		return;
 
-	printk(KERN_INFO "Inside [dequeue_task_rq_wrr]\n");
-
 	/* wrr_rq is not empty */
 	curr = wrr_rq->curr;
 	__list_del(curr->entry.prev, curr->entry.next);
 
 	wrr_rq->nr_task--;
 	wrr_rq->total_weight -= curr->weight;
+	sub_nr_running(rq, 1);
 	
-	printk(KERN_INFO "[dequeue_task_rq_wrr] dequeued task, weight = %d\n", wrr_rq->total_weight);
+	printk(KERN_INFO "[dequeue_task_rq_wrr] dequeued %s %d state: %ld, "
+			"on_rq: %d, rq_weight = %d\n",
+			p->comm, p->pid, p->state, p->on_rq, wrr_rq->total_weight);
 }
 
 /*
