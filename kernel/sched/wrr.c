@@ -6,9 +6,6 @@
 #include <linux/limits.h>
 #include <linux/list.h>
 
-#define MSECS 1000000 /* msec to nanosec */
-#define WRR_BASE_TIME (10 * MSECS)
-
 #ifdef CONFIG_SMP
 static int
 select_task_rq_wrr(struct task_struct *p, int cpu, int sd_flag, int flags)

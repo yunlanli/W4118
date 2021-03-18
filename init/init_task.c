@@ -14,6 +14,7 @@
 
 #include <asm/pgtable.h>
 #include <linux/uaccess.h>
+#include <linux/sched/wrr.h>
 
 static struct signal_struct init_signals = {
 	.nr_threads	= 1,
@@ -84,6 +85,10 @@ struct task_struct init_task
 	.rt		= {
 		.run_list	= LIST_HEAD_INIT(init_task.rt.run_list),
 		.time_slice	= RR_TIMESLICE,
+	},
+	.wrr		={
+		.weight = 1,
+		.time_slice = 1 * WRR_BASE_TIME,	
 	},
 	.tasks		= LIST_HEAD_INIT(init_task.tasks),
 #ifdef CONFIG_SMP
