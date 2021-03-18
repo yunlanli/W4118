@@ -1,8 +1,7 @@
 #include "sched.h"
 
 #include <trace/events/power.h>
-#include <linux/printk.h>
-#include <linux/cpumask.h> 
+#include <linux/cpumask.h>
 #include <linux/limits.h>
 #include <linux/list.h>
 
@@ -17,9 +16,9 @@ select_task_rq_wrr(struct task_struct *p, int cpu, int sd_flag, int flags)
 	struct rq *rq;
 	int min_weight = INT_MAX, min_cpu = -1;
 
-	for_each_online_cpu(cpu){
+	for_each_online_cpu(cpu) {
 		rq = cpu_rq(cpu);
-		if(rq->wrr.total_weight < min_weight){
+		if (rq->wrr.total_weight < min_weight) {
 			min_weight = rq->wrr.total_weight;
 			min_cpu = cpu;
 		}
@@ -44,7 +43,8 @@ balance_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
  *
  * wrr is non-preemptive -> no-op
  */
-static void check_preempt_curr_wrr(struct rq *rq, struct task_struct *p, int flags)
+static void
+check_preempt_curr_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
 }
 
@@ -71,7 +71,7 @@ pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	/* has runnable tasks */
 	wrr_se = wrr_rq->curr;
 	wrr_rq->curr = list_next_entry(wrr_se, entry);
-	
+
 	p = container_of(wrr_rq->curr, struct task_struct, wrr);
 	p->se.exec_start = rq_clock_task(rq);
 
@@ -83,7 +83,7 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct wrr_rq *wrr_rq;
 	struct sched_wrr_entity *wrr_se, *curr;
-	
+
 	wrr_rq = &rq->wrr;
 	wrr_se = &p->wrr;
 
@@ -96,26 +96,15 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 		__list_add(&wrr_se->entry, curr->entry.prev, &curr->entry);
 	}
 
-	/* start of temporary code */
-	if (wrr_se->weight == 0) {
-		wrr_se->weight = 5;
-	}
+	if (wrr_se->weight == 0)
+		wrr_se->weight = 1;
 	wrr_se->time_slice = wrr_se->weight * WRR_BASE_TIME;
-	/* end of temporary code */
-	
+
 	wrr_rq->nr_task++;
 	wrr_rq->total_weight += wrr_se->weight;
-	add_nr_running(rq,1);
-
-//	printk(KERN_DEBUG "======================\n");
-//	printk(KERN_INFO "[enqueue] %s pid: %d state: %ld\n",
-//			p->comm, p->pid, p->state);
+	add_nr_running(rq, 1);
 }
 
-/*
- * It is not legal to sleep in the idle task - print a warning
- * message if some code attempts to do it:
- */
 static void
 dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
@@ -137,9 +126,6 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	wrr_rq->nr_task--;
 	wrr_rq->total_weight -= curr->weight;
 	sub_nr_running(rq, 1);
-	
-//	printk(KERN_INFO "[dequeue] %s pid: %d state: %ld\n",
-//			p->comm, p->pid, p->state);
 }
 
 /*
@@ -155,7 +141,7 @@ static void yield_task_wrr(struct rq *rq)
  *
  * NOTE: This function can be called remotely by the tick offload that
  * goes along full dynticks. Therefore no local assumption can be made
- * and everything must be accessed through the @rq and @curr passed in
+ * and everything must be accessed through the @rq and @p passed in
  * parameters.
  */
 static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
@@ -166,19 +152,10 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 	now = rq_clock_task(rq);
 	delta_exec = now - p->se.exec_start;
 
-//	if (curr->time_slice > delta_exec) {
-//		printk(KERN_DEBUG "======================\n");
-//		printk(KERN_DEBUG "[task_tick_wrr] %s pid: %d remain: %llu, "
-//				"start: %llu\n",
-//				p->comm, p->pid, curr->time_slice - delta_exec,
-//				p->se.exec_start);
-//	}
-
 	/* if time is not up, return */
-	if(delta_exec < curr->time_slice)
+	if (delta_exec < curr->time_slice)
 		return;
 
-	
 	curr->time_slice = curr->weight * WRR_BASE_TIME;
 	resched_curr(rq);
 }
@@ -199,7 +176,7 @@ static void update_curr_wrr(struct rq *rq)
 {
 }
 
-void init_wrr_rq(struct wrr_rq* wrr_rq)
+void init_wrr_rq(struct wrr_rq *wrr_rq)
 {
 	wrr_rq->total_weight = 0;
 	wrr_rq->nr_task = 0;
@@ -208,10 +185,8 @@ void init_wrr_rq(struct wrr_rq* wrr_rq)
 
 const struct sched_class wrr_sched_class = {
 	.next			= &fair_sched_class,
-	/* no enqueue/yield_task for idle tasks */
 
 	.enqueue_task		= enqueue_task_wrr,
-	/* dequeue is not valid, we print a debug message there: */
 	.dequeue_task		= dequeue_task_wrr,
 	.yield_task		= yield_task_wrr,
 
