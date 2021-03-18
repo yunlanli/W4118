@@ -131,6 +131,9 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	curr = wrr_rq->curr;
 	__list_del(curr->entry.prev, curr->entry.next);
 
+	/* update wrr_rq->curr to the one before wrr_rq->curr */
+	wrr_rq->curr = list_prev_entry(curr, entry);
+
 	wrr_rq->nr_task--;
 	wrr_rq->total_weight -= curr->weight;
 	sub_nr_running(rq, 1);
