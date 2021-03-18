@@ -2711,7 +2711,7 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 	p->rt.on_rq		= 0;
 	p->rt.on_list		= 0;
 
-	p->wrr.weight		= 5;
+	p->wrr.weight		= 1;
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	INIT_HLIST_HEAD(&p->preempt_notifiers);
 #endif
@@ -2864,7 +2864,7 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 			p->policy = SCHED_NORMAL;
 			p->static_prio = NICE_TO_PRIO(0);
 			p->rt_priority = 0;
-		} else if (task_has_wrr_policy(p)){
+		} else if (task_has_wrr_policy(p)) {
 			p->policy = SCHED_WRR;
 			p->static_prio = NICE_TO_PRIO(0);
 			p->rt_priority = 0;
@@ -4036,7 +4036,7 @@ static void __sched notrace __schedule(bool preempt)
 	/* Promote REQ to ACT */
 	rq->clock_update_flags <<= 1;
 	update_rq_clock(rq);
-	
+
 	switch_count = &prev->nivcsw;
 	if (!preempt && prev->state) {
 		if (signal_pending_state(prev->state, prev)) {
@@ -4053,20 +4053,8 @@ static void __sched notrace __schedule(bool preempt)
 	}
 
 	next = pick_next_task(rq, prev, &rf);
-
-//	if (task_has_wrr_policy(prev) || task_has_wrr_policy(next)) {
-//		printk(KERN_DEBUG "======================\n");
-//		printk(KERN_INFO "[__schedule] prev: %s pid: %d policy: %d state: %ld resched: %d\n"
-//				 "	       on_rq: %d preempt: %d\n"
-//				 "             next: %s pid: %d policy: %d state: %ld\n",
-//			prev->comm, prev->pid, prev->policy, prev->state, test_tsk_need_resched(prev),
-//			prev->on_rq, preempt,
-//			next->comm, next->pid, next->policy, next->state);
-//	}
-
 	clear_tsk_need_resched(prev);
 	clear_preempt_need_resched();
-
 
 	if (likely(prev != next)) {
 		rq->nr_switches++;
@@ -5330,7 +5318,7 @@ SYSCALL_DEFINE1(get_wrr_info, struct wrr_info __user *, buf)
 
 	cnt = 0;
 
-	for_each_possible_cpu(cpu){
+	for_each_possible_cpu(cpu) {
 		rq = cpu_rq(cpu);
 		rq_lock_irq(rq, &rf);
 
@@ -5378,7 +5366,7 @@ root:
 
 	current->wrr.weight = weight;
 	task_rq_unlock(rq, current, &rf);
-  
+
 	return 0;
 }
 
