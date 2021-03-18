@@ -143,6 +143,14 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 }
 
 /*
+ * Called by do_sched_yield() with rq->lock held and upon return,
+ * schedule() is called to yield the CPU to another task
+ */
+static void yield_task_wrr(struct rq *rq)
+{
+}
+
+/*
  * scheduler tick hitting a task of our scheduling class.
  *
  * NOTE: This function can be called remotely by the tick offload that
@@ -205,6 +213,7 @@ const struct sched_class wrr_sched_class = {
 	.enqueue_task		= enqueue_task_wrr,
 	/* dequeue is not valid, we print a debug message there: */
 	.dequeue_task		= dequeue_task_wrr,
+	.yield_task		= yield_task_wrr,
 
 	.check_preempt_curr	= check_preempt_curr_wrr,
 
