@@ -2711,6 +2711,7 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 	p->rt.on_rq		= 0;
 	p->rt.on_list		= 0;
 
+	p->wrr.weight		= 5;
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	INIT_HLIST_HEAD(&p->preempt_notifiers);
 #endif
@@ -4013,9 +4014,6 @@ static void __sched notrace __schedule(bool preempt)
 	rq = cpu_rq(cpu);
 	prev = rq->curr;
 
-	if (task_has_wrr_policy(prev)) {
-		printk(KERN_DEBUG "[__schedule] prev=%s\n", prev->comm);
-	}
 	schedule_debug(prev, preempt);
 
 	if (sched_feat(HRTICK))
@@ -4039,10 +4037,6 @@ static void __sched notrace __schedule(bool preempt)
 	rq->clock_update_flags <<= 1;
 	update_rq_clock(rq);
 	
-	if (task_has_wrr_policy(prev)) {
-		printk(KERN_DEBUG "[__schedule] !preempt=%d && prev->state = %ld\n", !preempt, prev->state);
-	}
-
 	switch_count = &prev->nivcsw;
 	if (!preempt && prev->state) {
 		if (signal_pending_state(prev->state, prev)) {
@@ -4059,12 +4053,21 @@ static void __sched notrace __schedule(bool preempt)
 	}
 
 	next = pick_next_task(rq, prev, &rf);
+
+	if (task_has_wrr_policy(prev) || task_has_wrr_policy(next)) {
+		printk(KERN_DEBUG "======================\n");
+		printk(KERN_INFO "[__schedule] prev: %s pid: %d policy: %d state: %ld resched: %d\n"
+				 "	       on_rq: %d preempt: %d\n"
+				 "             next: %s pid: %d policy: %d state: %ld\n",
+			prev->comm, prev->pid, prev->policy, prev->state, test_tsk_need_resched(prev),
+			prev->on_rq, preempt,
+			next->comm, next->pid, next->policy, next->state);
+	}
+
 	clear_tsk_need_resched(prev);
 	clear_preempt_need_resched();
 
-	if (task_has_wrr_policy(prev)) {
-		printk(KERN_DEBUG "[__schedule] !prev=%s, next=%s\n", prev->comm, next->comm);
-	}
+
 	if (likely(prev != next)) {
 		rq->nr_switches++;
 		/*
@@ -4090,10 +4093,6 @@ static void __sched notrace __schedule(bool preempt)
 
 		trace_sched_switch(preempt, prev, next);
 
-		/* Also unlocks the rq: */
-		if (task_has_wrr_policy(next)) {
-			printk(KERN_DEBUG "[__schedule] context switch to %s\n", next->comm);
-		}
 		rq = context_switch(rq, prev, next, &rf);
 	} else {
 		rq->clock_update_flags &= ~(RQCF_ACT_SKIP|RQCF_REQ_SKIP);

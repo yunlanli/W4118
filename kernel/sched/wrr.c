@@ -17,16 +17,14 @@ select_task_rq_wrr(struct task_struct *p, int cpu, int sd_flag, int flags)
 	struct rq *rq;
 	int min_weight = INT_MAX, min_cpu = -1;
 
-	printk(KERN_INFO "Inside [select_task_rq_wrr]\n");
-
-	for_each_possible_cpu(cpu){
+	for_each_online_cpu(cpu){
 		rq = cpu_rq(cpu);
 		if(rq->wrr.total_weight < min_weight){
 			min_weight = rq->wrr.total_weight;
 			min_cpu = cpu;
 		}
 	}
-	printk(KERN_INFO "[select_task_rq_wrr] min_weight=%d, min_cpu = %d\n", min_weight, min_cpu);
+
 	return min_cpu;
 }
 
@@ -70,14 +68,11 @@ pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	if (wrr_rq->nr_task == 0)
 		return NULL;
 
-	printk(KERN_INFO "Inside [pick_next_task]\n");
-
 	/* has runnable tasks */
 	wrr_se = wrr_rq->curr;
 	wrr_rq->curr = list_next_entry(wrr_se, entry);
 	
 	p = container_of(wrr_se, struct task_struct, wrr);
-	printk(KERN_INFO "[pick_next_task] picked %s\n", p->comm);
 	p->se.exec_start = rq_clock_task(rq);
 
 	return p;
@@ -89,8 +84,6 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	struct wrr_rq *wrr_rq;
 	struct sched_wrr_entity *wrr_se, *curr;
 	
-	printk(KERN_INFO "Inside [enqueue_task_wrr]\n");
-
 	wrr_rq = &rq->wrr;
 	wrr_se = &p->wrr;
 
@@ -105,17 +98,18 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 
 	/* start of temporary code */
 	if (wrr_se->weight == 0) {
-		wrr_se->weight = 1;
+		wrr_se->weight = 5;
 	}
 	wrr_se->time_slice = wrr_se->weight * WRR_BASE_TIME;
 	/* end of temporary code */
 	
-	printk(KERN_INFO "[enqueue_task_wrr] added %s %d state: %ld, on_rq: %d, rq_weight: %d\n",
-			p->comm, p->pid, p->state, p->on_rq, wrr_rq->total_weight);
-
 	wrr_rq->nr_task++;
 	wrr_rq->total_weight += wrr_se->weight;
 	add_nr_running(rq,1);
+
+	printk(KERN_DEBUG "======================\n");
+	printk(KERN_INFO "[enqueue] %s pid: %d state: %ld\n",
+			p->comm, p->pid, p->state);
 }
 
 /*
@@ -141,9 +135,8 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	wrr_rq->total_weight -= curr->weight;
 	sub_nr_running(rq, 1);
 	
-	printk(KERN_INFO "[dequeue_task_rq_wrr] dequeued %s %d state: %ld, "
-			"on_rq: %d, rq_weight = %d\n",
-			p->comm, p->pid, p->state, p->on_rq, wrr_rq->total_weight);
+	printk(KERN_INFO "[dequeue] %s pid: %d state: %ld\n",
+			p->comm, p->pid, p->state);
 }
 
 /*
@@ -162,16 +155,18 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 	now = rq_clock_task(rq);
 	delta_exec = now - p->se.exec_start;
 
-	printk(KERN_DEBUG "[task_tick_wrr] %s remain: %llu, "
-			"start: %llu, time slice: %llu\n",
-			p->comm, curr->time_slice - delta_exec,
-			p->se.exec_start, curr->time_slice);
+	if (curr->time_slice > delta_exec) {
+		printk(KERN_DEBUG "======================\n");
+		printk(KERN_DEBUG "[task_tick_wrr] %s pid: %d remain: %llu, "
+				"start: %llu\n",
+				p->comm, p->pid, curr->time_slice - delta_exec,
+				p->se.exec_start);
+	}
 
 	/* if time is not up, return */
 	if(delta_exec < curr->time_slice)
 		return;
 
-	printk(KERN_DEBUG "rescheduling %s\n", p->comm);
 	
 	curr->time_slice = curr->weight * WRR_BASE_TIME;
 	resched_curr(rq);
