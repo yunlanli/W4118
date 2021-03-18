@@ -107,9 +107,9 @@ enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	wrr_rq->total_weight += wrr_se->weight;
 	add_nr_running(rq,1);
 
-	printk(KERN_DEBUG "======================\n");
-	printk(KERN_INFO "[enqueue] %s pid: %d state: %ld\n",
-			p->comm, p->pid, p->state);
+//	printk(KERN_DEBUG "======================\n");
+//	printk(KERN_INFO "[enqueue] %s pid: %d state: %ld\n",
+//			p->comm, p->pid, p->state);
 }
 
 /*
@@ -138,8 +138,8 @@ dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	wrr_rq->total_weight -= curr->weight;
 	sub_nr_running(rq, 1);
 	
-	printk(KERN_INFO "[dequeue] %s pid: %d state: %ld\n",
-			p->comm, p->pid, p->state);
+//	printk(KERN_INFO "[dequeue] %s pid: %d state: %ld\n",
+//			p->comm, p->pid, p->state);
 }
 
 /*
@@ -158,13 +158,13 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 	now = rq_clock_task(rq);
 	delta_exec = now - p->se.exec_start;
 
-	if (curr->time_slice > delta_exec) {
-		printk(KERN_DEBUG "======================\n");
-		printk(KERN_DEBUG "[task_tick_wrr] %s pid: %d remain: %llu, "
-				"start: %llu\n",
-				p->comm, p->pid, curr->time_slice - delta_exec,
-				p->se.exec_start);
-	}
+//	if (curr->time_slice > delta_exec) {
+//		printk(KERN_DEBUG "======================\n");
+//		printk(KERN_DEBUG "[task_tick_wrr] %s pid: %d remain: %llu, "
+//				"start: %llu\n",
+//				p->comm, p->pid, curr->time_slice - delta_exec,
+//				p->se.exec_start);
+//	}
 
 	/* if time is not up, return */
 	if(delta_exec < curr->time_slice)

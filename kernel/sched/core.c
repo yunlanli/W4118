@@ -4054,15 +4054,15 @@ static void __sched notrace __schedule(bool preempt)
 
 	next = pick_next_task(rq, prev, &rf);
 
-	if (task_has_wrr_policy(prev) || task_has_wrr_policy(next)) {
-		printk(KERN_DEBUG "======================\n");
-		printk(KERN_INFO "[__schedule] prev: %s pid: %d policy: %d state: %ld resched: %d\n"
-				 "	       on_rq: %d preempt: %d\n"
-				 "             next: %s pid: %d policy: %d state: %ld\n",
-			prev->comm, prev->pid, prev->policy, prev->state, test_tsk_need_resched(prev),
-			prev->on_rq, preempt,
-			next->comm, next->pid, next->policy, next->state);
-	}
+//	if (task_has_wrr_policy(prev) || task_has_wrr_policy(next)) {
+//		printk(KERN_DEBUG "======================\n");
+//		printk(KERN_INFO "[__schedule] prev: %s pid: %d policy: %d state: %ld resched: %d\n"
+//				 "	       on_rq: %d preempt: %d\n"
+//				 "             next: %s pid: %d policy: %d state: %ld\n",
+//			prev->comm, prev->pid, prev->policy, prev->state, test_tsk_need_resched(prev),
+//			prev->on_rq, preempt,
+//			next->comm, next->pid, next->policy, next->state);
+//	}
 
 	clear_tsk_need_resched(prev);
 	clear_preempt_need_resched();
