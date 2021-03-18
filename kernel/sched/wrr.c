@@ -72,7 +72,7 @@ pick_next_task_wrr(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	wrr_se = wrr_rq->curr;
 	wrr_rq->curr = list_next_entry(wrr_se, entry);
 	
-	p = container_of(wrr_se, struct task_struct, wrr);
+	p = container_of(wrr_rq->curr, struct task_struct, wrr);
 	p->se.exec_start = rq_clock_task(rq);
 
 	return p;
