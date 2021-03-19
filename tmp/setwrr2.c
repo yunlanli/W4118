@@ -62,15 +62,16 @@ static inline void start_process(char *program, int weight)
 {
 	pid_t pid;
 
+	set_sched_policy(SCHED_WRR, getpid());
+	set_weight(weight);
+		
+
 	pid = fork();
 
 	if (pid < 0) {
 		fprintf(stderr, "[ failure ] error: %s, fork failed", strerror(errno));
 	} else if (pid == 0) {
 		/* child process */
-		set_sched_policy(SCHED_WRR, pid);
-		set_weight(weight);
-		
 		fprintf(stderr, "[info] starting %s\n", program);
 		execlp(program, program, (char *) NULL);
 		fprintf(stderr, "[ failure ] start %s failed.\n", program);

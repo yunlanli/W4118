@@ -5,10 +5,10 @@
 #include <errno.h>
 #include <string.h>
 
-#define MAX_CPUS		8
 #define SCHED_WRR		7
+#define MAX_CPUS		8
 
-#define __SCHED_SETSCHEDULER	144
+#define __SCHED_SETSCHEDULER 	144
 #define __SCHED_GETSCHEDULER	145
 #define __GET_WRR_INFO		436
 #define __SET_WRR_WEIGHT	437
@@ -23,19 +23,20 @@ struct sched_param {
 	int sched_priority;
 };
 
-static inline void do_some_work(void)
+static inline void infinite_loop(void)
 {
-	for (int i = 1; i < 100000000; i++) ;
+	while(1) ;
+//	for (int i = 0; i < 100; i++) ;
 }
 
 static inline void check_sched_policy(void)
 {
 	int policy = syscall(__SCHED_GETSCHEDULER, getpid());
 	if (policy < 0){
-		fprintf(stderr, "error: %s\n", strerror(errno));
+		fprintf(stderr, "[ error ] pid %d: %s\n", getpid(), strerror(errno));
 		exit(-1);
 	} else if (policy != SCHED_WRR) {
-		fprintf(stderr, "error: current policy: %d, setscheduler unsuccessful\n", policy);
+		fprintf(stderr, "[ error ] pid %d current policy: %d, setscheduler unsuccessful\n", getpid(), policy);
 		exit(-1);
 	}
 
@@ -57,18 +58,13 @@ static inline void set_sched_policy(int policy)
 	}
 }
 
-static inline void set_weight(int weight)
+static inline void fork_wrapper(void)
 {
-	int ret;
-
-	ret = syscall(__SET_WRR_WEIGHT, weight);
-	if (ret && errno == EPERM)
-		fprintf(stderr, "[ failure ] can't set wrr_weight on a process "
-				"not using SCHED_WRR policy\n");
-	else if (ret)
-		fprintf(stderr, "[ failure ] %s\n", strerror(errno));
-
-	fprintf(stderr, "[ success ] set pid %d's wrr_weight to %d\n", getpid(), weight);
+	pid_t child = fork();
+	if (child < 0) {
+		fprintf(stderr, "[ error ] %s\n", strerror(errno));
+		exit(-1);
+	}
 }
 
 static inline void get_wrr_info(void)
@@ -91,53 +87,23 @@ static inline void get_wrr_info(void)
 				i, buf->nr_running[i], buf->total_weight[i]);
 }
 
-int main(int argc, char **argv)
+int main()
 {
-	fprintf(stderr, "Process %d started...\n", getpid());
-
-	get_wrr_info();
+	pid_t parent = getpid();
+	fprintf(stderr, "pid: %d\n", parent);
 
 	set_sched_policy(SCHED_WRR);
 	check_sched_policy();
+	
+//	for (int i = 0; i < 4; i++)
+//		fork_wrapper();
 
-	for (int i = 1; i < atoi(argv[1]); i++) {
-		fork();
-//		set_weight(2*i);
+	if (getpid() == parent) {
+		fprintf(stderr, "pid: %d\n", getpid());
+		get_wrr_info();
 	}
 
-	/* test if our sched_class implementation can run the task successfully
-	 */
-	do_some_work();
+	infinite_loop();
 
-#ifdef test_pnt
-	pid_t child = fork();
-	if (child < 0) {
-		fprintf(stderr, "error: %s\n", strerror(errno));
-		exit(-1);
-	} else if (child == 0) {
-		check_sched_policy();
-		
-		/* child process */
-		do_some_work();
-	} else {
-		fprintf(stderr, "[ info ] parent");
-	}
-#endif
-
-#ifdef test_ttnb
-	fprintf(stderr, "[ info ] entering inifinite loop\n");
-	while(1)
-		fprintf(stderr, "[ info ] next\n");
-#endif
-
-#ifdef test_ttb
-	fprintf(stderr, "entering finite blocking and waking loop...\n");
-	int k = 100;
-	while(--k > 0){
-		printf("sleeping\n");
-		sleep(2);
-		printf("waking up\n");
-	}
-#endif
 	return 0;
 }
