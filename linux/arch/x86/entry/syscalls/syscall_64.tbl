@@ -357,6 +357,9 @@
 433	common	fspick			__x64_sys_fspick
 434	common	pidfd_open		__x64_sys_pidfd_open
 435	common	clone3			__x64_sys_clone3/ptregs
+436	common	get_pagetable_layout	__x64_sys_get_pagetable_layout
+437	common	expose_page_table	__x64_sys_expose_page_table
+438	common	write_to_va		__x64_sys_write_to_va
 
 #
 # x32-specific system call numbers start at 512 to avoid cache impact
