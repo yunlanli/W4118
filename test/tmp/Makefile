@@ -7,9 +7,11 @@ CXXFLAGS = -g -Wall $(INCLUDES)
 
 .PHONY: all clean
 
-all: clean mm_assignment
+all: clean mm_assignment get_pgtbl_info.c
+
+mm_assignment: expose_pgtbl.h
+
+get_pgtbl_info: expose_pgtbl.h
 
 clean:
-	rm -rf *.o mm_assignment
-
-mm_assignment:
+	rm -rf *.o mm_assignment get_pgtbl_info
