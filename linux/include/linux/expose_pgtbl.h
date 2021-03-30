@@ -18,4 +18,12 @@ struct expose_pgtbl_args {
 	unsigned long begin_vaddr;
 	unsigned long end_vaddr;
 };
+
+struct va_info {
+	pgd_t	*pgd;
+	p4d_t	*p4d;
+	pud_t	*pud;
+	pmd_t	*pmd;
+	pte_t	*pte;
+};
 #endif

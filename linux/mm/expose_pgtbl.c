@@ -26,3 +26,63 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 {
 	return 0;
 }
+
+
+static inline int pte_copy(pmd_t *pmd, struct vm_area_struct *vma,
+		struct expose_pgtbl_args *arg, struct va_info *lst)
+{
+	return 0;
+}
+
+/*
+ * @src_pud: used to get the base address of pmd table containing the first pmd_entry
+ * @addr: the start address 
+ * @vma: vm_area_struct of @addr
+ * @args: contains the base addresses of page directories & tables in user space
+ * @lst: contains most recent page entries copied / written
+ */
+static inline int pmd_walk(pud_t *src_pud,
+		unsigned long addr,
+		struct vm_area_struct *vma,
+		struct expose_pgtbl_args *args,
+		struct va_info *lst)
+{
+	int err;
+	unsigned long end = vma->vm_end;
+	pmd_t *src_pmd = pmd_offset(src_pud, addr);
+	unsigned long usr_pmd_addr, next;
+
+	/* 
+	 * iterating over each pmd_entry in the
+	 * 	@addr's pmd table , for each pmd do:
+	 * remap the entire pte table containing @addr to the userspace
+	 */
+	do{
+		next = pmd_addr_end(addr, end);
+
+		/* no pte table to be copied, continue */
+		if (pmd_none_or_clear_bad(src_pmd))
+			continue;
+
+		/* 
+		 * copies 
+		 * 	va of pte_tbl_base @args->page_table_addr
+		 * into
+		 *      fake_pmd_table entry @usr_pmd_addr
+		 */
+		if (src_pmd != lst->pmd) {
+			/* increase user space base_pte to the next one */
+			args->page_table_addr += PAGE_SIZE;
+			lst->pmd = src_pmd;
+
+			err = pte_copy(src_pmd, vma, args, lst);
+
+			usr_pmd_addr = args->fake_pmds + pmd_index(addr);
+			copy_to_user((void *) usr_pmd_addr,
+					&args->page_table_addr,
+					sizeof(unsigned long));              
+		}
+	} while (src_pmd++, addr = next, addr != end);
+
+	return err;
+}
