@@ -5,11 +5,13 @@
 
 /*
  * move base addresses of userspace fake tables by 1 Page
- * It will be added back on pgd_walk, pmd_walk, etc first write
+ * It will be added back on pgd_walk, pmd_walk, etc first write, 
+ * except for pgd, because there is techinically only one, so it
+ * is not updated / hence should not be decremented 
  */
 static inline void init_base(struct expose_pgtbl_args *args)
 {
-	args->fake_pgd -= PAGE_SIZE;
+	// args->fake_pgd -= PAGE_SIZE;
 	args->fake_p4ds -= PAGE_SIZE;
 	args->fake_puds -= PAGE_SIZE;
 	args->fake_pmds -= PAGE_SIZE;
@@ -321,7 +323,7 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 		/* our start vaddr @addr is the max of @vma->vm_start, @addr */
 		addr = vma->vm_start < addr ? addr : vma->vm_start;
 		end = vma->vm_end < kargs.end_vaddr ? vma->vm_end : kargs.end_vaddr;
-
+		
 		if ((err = pgd_walk(addr, end, mm, vma, &kargs, &lst)))
 			return err;
 
