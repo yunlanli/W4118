@@ -21,8 +21,11 @@ static inline int pte_copy(pmd_t *pmd, struct vm_area_struct *vma,
 {
 	unsigned long pfn = pmd_pfn(*pmd);
 	unsigned long user_pte_addr = args->page_table_addr;
-
 	struct vm_area_struct *user_vma = find_vma(current->mm, user_pte_addr);
+
+	printk(KERN_DEBUG "-----[pte_copy] to_addr=%ld with pfn=%ld\n", 
+			user_pte_addr,
+			pfn);
 	return remap_pfn_range(user_vma, user_pte_addr, pfn, PAGE_SIZE, vma->vm_page_prot);
 }
 
@@ -53,6 +56,8 @@ static inline int pmd_walk(pud_t *src_pud,
 	do{
 		next = pmd_addr_end(addr, end);
 
+		printk(KERN_DEBUG "----[pmd_walk] with addr=%ld\n", addr);
+
 		/* no pte table to be copied, continue */
 		if (pmd_none_or_clear_bad(src_pmd))
 			continue;
@@ -67,11 +72,19 @@ static inline int pmd_walk(pud_t *src_pud,
 			/* increase user space base_pte to the next one */
 			args->page_table_addr += PAGE_SIZE;
 			lst->pmd = src_pmd;
+		
+			printk(KERN_DEBUG "----[pmd_walk] new pte table=%ld\n", 
+					args->page_table_addr);
 
 			if( (err = pte_copy(src_pmd, vma, args, lst)) )
 				return err;
-
+			
 			usr_pmd_addr = args->fake_pmds + pmd_index(addr);
+			
+			printk(KERN_DEBUG "----[pmd_walk] copying=%ld to %ld\n", 
+					args->page_table_addr,
+					usr_pmd_addr);
+
 			if(copy_to_user((void *) usr_pmd_addr,
 					&args->page_table_addr,
 					sizeof(unsigned long)))
@@ -99,7 +112,8 @@ static inline int pud_walk(p4d_t 		*src_p4d,
 		if (pud_none_or_clear_bad(src_pud))
 			continue;
 
-		/* if @src_pud == @lst->pud:
+		/* 
+		 * if @src_pud == @lst->pud:
 		 *   do not update fake_pmd_base, 
 		 *   same pmd table because same pud entry
 		 *
@@ -111,7 +125,12 @@ static inline int pud_walk(p4d_t 		*src_p4d,
 		if (src_pud != lst->pud){
 			args->fake_pmds += PAGE_SIZE;
 			lst->pud = src_pud;
+			
+			printk(KERN_DEBUG "---[pud_walk] new pmd table=%ld\n", 
+					args->fake_pmds);
 		}
+			
+		printk(KERN_DEBUG "---[pud_walk] walking addr=%ld\n", addr);
 
 		/* 
 		 * still need to do the walk if regardless 
@@ -120,9 +139,14 @@ static inline int pud_walk(p4d_t 		*src_p4d,
 		 */
 		if( (err = pmd_walk(src_pud, addr, next, vma, args, lst)) )
 			return err;
-
+		
 		/* 2. now we put the fake_pmd_addr to usr_pud_addr */
 		usr_pud_addr = args->fake_pmds + pmd_index(addr);
+		
+		printk(KERN_DEBUG "---[pud_walk] copying=%ld to %ld\n", 
+				args->fake_pmds,
+				usr_pud_addr);
+
 		if(copy_to_user((void *)usr_pud_addr, 
 					&args->fake_pmds, 
 					sizeof(unsigned long)))
@@ -156,12 +180,22 @@ static inline int p4d_walk(pgd_t		*src_pgd,
 		if(src_p4d != lst->p4d){
 			args->fake_puds += PAGE_SIZE;
 			lst->p4d = src_p4d;
+			
+			printk(KERN_DEBUG "--[p4d_walk] new pud table=%ld\n", 
+					args->fake_puds);
 		}
+		
+		printk(KERN_DEBUG "--[p4d_walk] walking addr=%ld\n", addr);
 
 		if( (err = pud_walk(src_p4d, addr, next, vma, args, lst)) )
 			return err;
 
 		usr_p4d_addr = args->fake_p4ds + p4d_index(addr);
+		
+		printk(KERN_DEBUG "--[p4d_walk] copying=%ld to %ld\n", 
+				args->fake_puds,
+				usr_p4d_addr);
+
 		if(copy_to_user((void *)usr_p4d_addr, 
 					&args->fake_puds, 
 					sizeof(unsigned long)))
@@ -193,12 +227,22 @@ static inline int pgd_walk(unsigned long addr,
 		if(src_pgd != lst->pgd){
 			args->fake_p4ds += PAGE_SIZE;
 			lst->pgd = src_pgd;
+			
+			printk(KERN_DEBUG "-[pgd_walk] new p4d table=%ld\n", 
+					args->fake_p4ds);
 		}
+		
+		printk(KERN_DEBUG "-[pgd_walk] walking addr=%ld\n", addr);
 
 		if( (err = p4d_walk(src_pgd, addr, next, vma, args, lst)) )
 			return err;
 
 		usr_pgd_addr = args->fake_pgd + pgd_index(addr);
+		
+		printk(KERN_DEBUG "-[pgd_walk] copying=%ld to %ld\n", 
+				args->fake_p4ds,
+				usr_pgd_addr);
+
 		if(copy_to_user((void *)usr_pgd_addr, 
 					&args->fake_p4ds, 
 					sizeof(unsigned long)))
