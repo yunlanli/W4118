@@ -65,6 +65,7 @@ int main(int argc, char **argv)
 	pid_t pid;
 	int verbose;
 	int ret;
+	void *temp_addr;
 
 	verbose = 0;
 
@@ -100,8 +101,18 @@ int main(int argc, char **argv)
 	if (!(ret = get_pagetable_layout(&pgtbl_info)))
 			return ret;
 
-	args.fake_pgd = (unsigned long) mmap(NULL, PAGE_SIZE, PROT_READ, MAP_ANONYMOUS | MAP_FIXED, -1, 0);
 	
+	temp_addr = mmap(NULL, 5*PAGE_SIZE, PROT_READ, MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+	
+	if (temp_addr == MAP_FAILED)
+		return -1;
+	args.fake_pgd = (unsigned long) temp_addr;
+	args.fake_p4ds = args.fake_pgd + PAGE_SIZE;
+	args.fake_pmds = args.fake_p4ds + PAGE_SIZE;
+	args.fake_puds = args.fake_pmds + PAGE_SIZE;
+	args.page_table_addr = args.fake_puds + PAGE_SIZE;
+
+
 	/* syscalls */
 	if (!(ret = expose_page_table(pid, &args)))
 		return ret;
