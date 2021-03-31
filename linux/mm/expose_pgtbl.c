@@ -72,11 +72,15 @@ static inline int pmd_walk(pud_t *src_pud,
 	do{
 		next = pmd_addr_end(addr, end);
 
-		printk(KERN_DEBUG "----[pmd_walk] with addr=%ld\n", addr);
+		printk(KERN_DEBUG "?---[pmd_walk] with addr=%ld, next=%ld\n", 
+				addr, next);
 
 		/* no pte table to be copied, continue */
 		if (pmd_none_or_clear_bad(src_pmd))
 			continue;
+		
+		printk(KERN_DEBUG ".---[pmd_walk] with addr=%ld, next=%ld\n", 
+				addr, next);
 
 		/* 
 		 * copies 
@@ -125,6 +129,9 @@ static inline int pud_walk(p4d_t 		*src_p4d,
 
 	do{
 		next = pud_addr_end(addr, end);
+		
+		printk(KERN_DEBUG "?--[pud_walk] walking addr=%ld, next=%ld\n", 
+				addr, next);
 
 		if (pud_none_or_clear_bad(src_pud))
 			continue;
@@ -147,7 +154,8 @@ static inline int pud_walk(p4d_t 		*src_p4d,
 					args->fake_pmds);
 		}
 			
-		printk(KERN_DEBUG "---[pud_walk] walking addr=%ld\n", addr);
+		printk(KERN_DEBUG ".--[pud_walk] walking addr=%ld, next=%ld\n", 
+				addr, next);
 
 		/* 
 		 * still need to do the walk if regardless 
@@ -191,6 +199,9 @@ static inline int p4d_walk(pgd_t		*src_pgd,
 
 	do{
 		next = p4d_addr_end(addr, end);
+		
+		printk(KERN_DEBUG "?-[p4d_walk] walking addr=%ld, next-%ld\n", 
+				addr, next);
 
 		if (p4d_none_or_clear_bad(src_p4d))
 			continue;
@@ -203,14 +214,15 @@ static inline int p4d_walk(pgd_t		*src_pgd,
 					args->fake_puds);
 		}
 		
-		printk(KERN_DEBUG "--[p4d_walk] walking addr=%ld\n", addr);
+		printk(KERN_DEBUG "--[p4d_walk] walking addr=%ld, next-%ld\n", 
+				addr, next);
 
 		if( (err = pud_walk(src_p4d, addr, next, src_mm, vma, args, lst)) )
 			return err;
 
 		usr_p4d_addr = args->fake_p4ds + p4d_index(addr);
 		
-		printk(KERN_DEBUG "--[p4d_walk] copying=%ld to %ld\n", 
+		printk(KERN_DEBUG ".-[p4d_walk] copying=%ld to %ld\n", 
 				args->fake_puds,
 				usr_p4d_addr);
 
@@ -238,6 +250,9 @@ static inline int pgd_walk(unsigned long addr,
 
 	do{
 		next = pgd_addr_end(addr, end);
+		
+		printk(KERN_DEBUG "?[pgd_walk] walking addr=%ld, next=%ld\n", 
+				addr, next);
 
 		if (pgd_none_or_clear_bad(src_pgd))
 			continue;
@@ -250,7 +265,8 @@ static inline int pgd_walk(unsigned long addr,
 					args->fake_p4ds);
 		}
 		
-		printk(KERN_DEBUG "-[pgd_walk] walking addr=%ld\n", addr);
+		printk(KERN_DEBUG ".[pgd_walk] walking addr=%ld, next=%ld\n", 
+				addr, next);
 
 		if( (err = p4d_walk(src_pgd, addr, next, src_mm, vma, args, lst)) )
 			return err;
@@ -315,6 +331,9 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 
 	do {
 		vma = find_vma(mm, addr);
+		
+		printk(KERN_DEBUG "?[vma_walk] walking addr=%ld, end=%ld\n", 
+				addr, kargs.end_vaddr);
 
 		/* no vma is found */
 		if (vma == NULL || (vma->vm_start > kargs.end_vaddr))
@@ -324,9 +343,13 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 		addr = vma->vm_start < addr ? addr : vma->vm_start;
 		end = vma->vm_end < kargs.end_vaddr ? vma->vm_end : kargs.end_vaddr;
 		
+		printk(KERN_DEBUG ".[vma_walk] walking addr=%ld, end=%ld\n", 
+				addr, kargs.end_vaddr);
+		
 		if ((err = pgd_walk(addr, end, mm, vma, &kargs, &lst)))
 			return err;
 
+		/* ARE YOU SURE vma-> end is the start of the NEXT vma */
 	} while (addr = vma->vm_end, addr <= kargs.end_vaddr);
 	
 out:
