@@ -29,13 +29,18 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 
 
 static inline int pte_copy(pmd_t *pmd, struct vm_area_struct *vma,
-		struct expose_pgtbl_args *arg, struct va_info *lst)
+		struct expose_pgtbl_args *args, struct va_info *lst)
 {
-	return 0;
+	unsigned long pfn = pmd_pfn(*pmd);
+	unsigned long user_pte_addr = args->page_table_addr;
+
+	struct vm_area_struct *user_vma = find_vma(current->mm, user_pte_addr);
+	return remap_pfn_range(user_vma, user_pte_addr, pfn, PAGE_SIZE, vma->vm_page_prot);
 }
 
 /*
- * @src_pud: used to get the base address of pmd table containing the first pmd_entry * @addr: the start address of the PMD_TABLE
+ * @src_pud: used to get the base address of pmd table containing the first pmd_entry 
+ * @addr: the start address of the PMD_TABLE
  * @end: the last address of the PMD_TABLE or vma->end, 
  * 		depending on which comes faster
  * @args: contains the base addresses of page directories & tables in user space
@@ -150,6 +155,9 @@ static int p4d_walk(pgd_t			*src_pgd,
 	int err;
 	p4d_t *src_p4d = p4d_offset(src_pgd, addr);
 	unsigned long usr_p4d_addr, next;
+
+	if (CONFIG_PGTABLE_LEVELS == 4)
+		return pud_walk((p4d_t *)src_pgd, addr, end, vma, args, lst);
 
 	do{
 		next = p4d_addr_end(addr, end);
