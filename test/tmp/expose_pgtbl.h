@@ -13,6 +13,7 @@
 #define __GET_PAGETABLE_LAYOUT		436
 #define __EXPOSE_PGTBL_ARGS		437
 #define __WRITE_TO_VA			438
+#define PAGE_SIZE			512
 
 typedef unsigned int	u32;
 typedef u32		uint32_t;
