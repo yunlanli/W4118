@@ -24,6 +24,34 @@ SYSCALL_DEFINE1(get_pagetable_layout,
 SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 		struct expose_pgtbl_args __user *, args)
 {
+	struct expose_pgtbl_args kargs;
+	struct va_info lst;
+	struct vm_area_struct *vma;
+	struct mm_struct *mm;
+	struct task_struct *p;
+	int err;
+	unsigned long addr, end;
+
+	if (copy_from_user(&kargs, args, sizeof(kargs)))
+		return -EFAULT;
+
+	addr = kargs.begin_vaddr;
+
+	p = pid == -1 ? current : find_task_by_vpid(pid);
+	mm = p->mm;
+
+	do {
+		vma = find_vma(mm, addr);
+
+		/* no vma is found */
+		if (vma == NULL || (vma->vm_start > kargs.end_vaddr))
+			return 0;
+
+		/* our start vaddr @addr is the max of @vma->vm_start, @addr */
+		addr = vma->vm_start < addr ? addr : vma->vm_start;
+
+	} while (addr = vma->vm_end, addr <= kargs.end_vaddr);
+
 	return 0;
 }
 
