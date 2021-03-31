@@ -3,58 +3,18 @@
 #include <linux/types.h>
 #include <linux/expose_pgtbl.h>
 
-SYSCALL_DEFINE1(get_pagetable_layout,
-		struct pagetable_layout_info __user *, pgtbl_info)
+/*
+ * move base addresses of userspace fake tables by 1 Page
+ * It will be added back on pgd_walk, pmd_walk, etc first write
+ */
+static inline void init_base(struct expose_pgtbl_args *args)
 {
-	struct pagetable_layout_info kinfo = {
-		.pgdir_shift	= PGDIR_SHIFT,
-		.p4d_shift	= P4D_SHIFT,
-		.pud_shift	= PUD_SHIFT,
-		.pmd_shift	= PMD_SHIFT,
-		.page_shift	= PAGE_SHIFT,
-	};
-
-	if (copy_to_user(pgtbl_info, &kinfo,
-			 sizeof(struct pagetable_layout_info)))
-		return -EFAULT;
-
-	return 0;
+	args->fake_pgd -= PAGE_SIZE;
+	args->fake_p4ds -= PAGE_SIZE;
+	args->fake_puds -= PAGE_SIZE;
+	args->fake_pmds -= PAGE_SIZE;
+	args->page_table_addr -= PAGE_SIZE;
 }
-
-SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
-		struct expose_pgtbl_args __user *, args)
-{
-	struct expose_pgtbl_args kargs;
-	struct va_info lst;
-	struct vm_area_struct *vma;
-	struct mm_struct *mm;
-	struct task_struct *p;
-	int err;
-	unsigned long addr, end;
-
-	if (copy_from_user(&kargs, args, sizeof(kargs)))
-		return -EFAULT;
-
-	addr = kargs.begin_vaddr;
-
-	p = pid == -1 ? current : find_task_by_vpid(pid);
-	mm = p->mm;
-
-	do {
-		vma = find_vma(mm, addr);
-
-		/* no vma is found */
-		if (vma == NULL || (vma->vm_start > kargs.end_vaddr))
-			return 0;
-
-		/* our start vaddr @addr is the max of @vma->vm_start, @addr */
-		addr = vma->vm_start < addr ? addr : vma->vm_start;
-
-	} while (addr = vma->vm_end, addr <= kargs.end_vaddr);
-
-	return 0;
-}
-
 
 static inline int pte_copy(pmd_t *pmd, struct vm_area_struct *vma,
 		struct expose_pgtbl_args *args, struct va_info *lst)
@@ -122,7 +82,7 @@ static inline int pmd_walk(pud_t *src_pud,
 	return 0;
 }
 
-static int pud_walk(p4d_t 			*src_p4d,
+static inline int pud_walk(p4d_t 		*src_p4d,
 		unsigned long                	addr,
 		unsigned long                	end,
 		struct vm_area_struct        	*vma,
@@ -173,7 +133,7 @@ static int pud_walk(p4d_t 			*src_p4d,
 	return 0;
 }
 
-static int p4d_walk(pgd_t			*src_pgd,
+static inline int p4d_walk(pgd_t		*src_pgd,
 		unsigned long                	addr,
 		unsigned long                	end,
 		struct vm_area_struct        	*vma,
@@ -212,15 +172,15 @@ static int p4d_walk(pgd_t			*src_pgd,
 	return 0;
 }
 
-static int pgd_walk(struct mm_struct 		*src_mm,
-		struct vm_area_struct 		*vma,
-		struct expose_pgtbl_args     	*args,
-		struct va_info        		*lst)
+static inline int pgd_walk(unsigned long addr,
+		unsigned long end,
+		struct vm_area_struct *vma,
+		struct expose_pgtbl_args *args,
+		struct va_info *lst)
 {
 	int err;
-	unsigned long addr = vma->vm_start;
-	unsigned long end = vma->vm_end;
 	unsigned long usr_pgd_addr, next;
+	struct mm_struct *src_mm = vma->vm_mm;
 
 	pgd_t *src_pgd = pgd_offset(src_mm, addr);
 
@@ -245,6 +205,64 @@ static int pgd_walk(struct mm_struct 		*src_mm,
 			return -EFAULT;
 
 	}while(src_pgd++, addr = next, addr != end);
+
+	return 0;
+}
+
+SYSCALL_DEFINE1(get_pagetable_layout,
+		struct pagetable_layout_info __user *, pgtbl_info)
+{
+	struct pagetable_layout_info kinfo = {
+		.pgdir_shift	= PGDIR_SHIFT,
+		.p4d_shift	= P4D_SHIFT,
+		.pud_shift	= PUD_SHIFT,
+		.pmd_shift	= PMD_SHIFT,
+		.page_shift	= PAGE_SHIFT,
+	};
+
+	if (copy_to_user(pgtbl_info, &kinfo,
+			 sizeof(struct pagetable_layout_info)))
+		return -EFAULT;
+
+	return 0;
+}
+
+SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
+		struct expose_pgtbl_args __user *, args)
+{
+	struct expose_pgtbl_args kargs;
+	struct va_info lst = { 0, 0, 0, 0, 0};
+	struct vm_area_struct *vma;
+	struct mm_struct *mm;
+	struct task_struct *p;
+	int err;
+	unsigned long addr, end;
+
+	if (copy_from_user(&kargs, args, sizeof(kargs)))
+		return -EFAULT;
+
+	init_base(&kargs);
+
+	addr = kargs.begin_vaddr;
+
+	p = pid == -1 ? current : find_task_by_vpid(pid);
+	mm = p->mm;
+
+	do {
+		vma = find_vma(mm, addr);
+
+		/* no vma is found */
+		if (vma == NULL || (vma->vm_start > kargs.end_vaddr))
+			return 0;
+
+		/* our start vaddr @addr is the max of @vma->vm_start, @addr */
+		addr = vma->vm_start < addr ? addr : vma->vm_start;
+		end = vma->vm_end < kargs.end_vaddr ? vma->vm_end : kargs.end_vaddr;
+
+		if ((err = pgd_walk(addr, end, vma, &kargs, &lst)))
+			return err;
+
+	} while (addr = vma->vm_end, addr <= kargs.end_vaddr);
 
 	return 0;
 }
