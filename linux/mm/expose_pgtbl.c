@@ -292,12 +292,14 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 	p = pid == -1 ? current : find_task_by_vpid(pid);
 	mm = p->mm;
 
+	down_read(&mm->mmap_sem);
+
 	do {
 		vma = find_vma(mm, addr);
 
 		/* no vma is found */
 		if (vma == NULL || (vma->vm_start > kargs.end_vaddr))
-			return 0;
+			goto out;
 
 		/* our start vaddr @addr is the max of @vma->vm_start, @addr */
 		addr = vma->vm_start < addr ? addr : vma->vm_start;
@@ -308,5 +310,7 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 
 	} while (addr = vma->vm_end, addr <= kargs.end_vaddr);
 
+out:
+	up_read(&mm->mmap_sem);
 	return 0;
 }
