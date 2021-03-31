@@ -138,9 +138,6 @@ int main(int argc, char **argv)
 			continue;
 
 		if ((pte_entry = (&pte_entries)[get_index(virt, pgtbl_info.page_shift)]) == 0)
-			continue;
-
-		if (pte_entry == 0)
 		{
 			if (verbose)
 				printf("0xdead00000000 0x00000000000 0 0 0 0\n");
