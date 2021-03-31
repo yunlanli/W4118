@@ -9,7 +9,7 @@
 
 #define __NR_get_pgtbl_layout 436
 #define __NR_expose_pgtbl_args 437
-#define PGD_SIZE 4096
+#define PAGE_SIZE 4096
 
 struct expose_pgtbl_args {
 	unsigned long fake_pgd;
@@ -59,11 +59,12 @@ static inline int user_bit(unsigned long pte_entry)
 
 int main(int argc, char **argv)
 {
-	// struct expose_pgtbl_args args;
-	// struct pagetable_layout_info *pgtbl_info
+	struct expose_pgtbl_args args;
+	struct pagetable_layout_info pgtbl_info;
 	unsigned long va_begin, va_end;
 	pid_t pid;
 	int verbose;
+	int ret;
 
 	verbose = 0;
 
@@ -90,9 +91,24 @@ int main(int argc, char **argv)
 	if (va_begin >= va_end)
 		return -1;
 
+	args.begin_vaddr = va_begin;
+	args.end_vaddr = va_end;
+
 	printf("argc %d, pid: %d, verbose: %d, va_begin: %#014lx, va_end: %#014lx\n", 
 		argc, pid, verbose, va_begin, va_end);
-	mmap(NULL, 5 , PROT_READ, MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+
+	if (!(ret = get_pagetable_layout(&pgtbl_info)))
+			return ret;
+
+	args.fake_pgd = (unsigned long) mmap(NULL, PAGE_SIZE, PROT_READ, MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+	
+	/* syscalls */
+	if (!(ret = expose_page_table(pid, &args)))
+		return ret;
+
+	/* dump PTEs */
+
+	
 
 	return 0;
 }
