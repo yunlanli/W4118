@@ -105,7 +105,7 @@ int main(int argc, char **argv)
 			return ret;
 
 	
-	temp_addr = mmap(NULL, 5 * PAGE_SIZE, PROT_WRITE,
+	temp_addr = mmap(NULL, 6 * PAGE_SIZE, PROT_WRITE,
 			MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	
 	if (temp_addr == MAP_FAILED) {
@@ -113,16 +113,18 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	args.fake_pgd = (unsigned long) temp_addr + PAGE_SIZE;
+	args.fake_pgd = (unsigned long) temp_addr;
 	args.fake_p4ds = args.fake_pgd + PAGE_SIZE;
 	args.fake_pmds = args.fake_p4ds + PAGE_SIZE;
 	args.fake_puds = args.fake_pmds + PAGE_SIZE;
 	args.page_table_addr = args.fake_puds + PAGE_SIZE;
 
 	fprintf(stderr,
-		"	 pgd		  p4d		   pmd		    pud		     pte      \n"
-		"  ---------------  ---------------  ---------------  ---------------  ---------------\n"
-		"  %lu              %lu              %lu              %lu              %lu	      \n",
+		"pgd: %lu\n"
+		"p4d: %lu\n"
+		"pud: %lu\n"
+		"pmd: %lu\n"
+		"pte: %lu\n",
 		args.fake_pgd, args.fake_p4ds, args.fake_pmds, args.fake_puds, args.page_table_addr);
 
 
