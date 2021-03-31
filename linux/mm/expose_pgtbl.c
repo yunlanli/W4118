@@ -89,8 +89,7 @@ static inline int pmd_walk(pud_t *src_pud,
 	return 0;
 }
 
-int pud_walk(
-		p4d_t 				*src_p4d,
+static int pud_walk(p4d_t 			*src_p4d,
 		unsigned long                	addr,
 		unsigned long                	end,
 		struct vm_area_struct        	*vma,
@@ -137,6 +136,79 @@ int pud_walk(
 			return -EFAULT;
 
 	}while(src_pud++, addr = next, addr != end);
+
+	return 0;
+}
+
+static int p4d_walk(pgd_t			*src_pgd,
+		unsigned long                	addr,
+		unsigned long                	end,
+		struct vm_area_struct        	*vma,
+		struct expose_pgtbl_args     	*args,
+		struct va_info        		*lst)
+{
+	int err;
+	p4d_t *src_p4d = p4d_offset(src_pgd, addr);
+	unsigned long usr_p4d_addr, next;
+
+	do{
+		next = p4d_addr_end(addr, end);
+
+		if (p4d_none_or_clear_bad(src_p4d))
+			continue;
+		
+		if(src_p4d != lst->p4d){
+			args->fake_puds += PAGE_SIZE;
+			lst->p4d = src_p4d;
+		}
+
+		if( (err = pud_walk(src_p4d, addr, next, vma, args, lst)) )
+			return err;
+
+		usr_p4d_addr = args->fake_p4ds + p4d_index(addr);
+		if(copy_to_user((void *)usr_p4d_addr, 
+					&args->fake_puds, 
+					sizeof(unsigned long)))
+			return -EFAULT;
+
+	}while(src_p4d++, addr = next, addr != end);
+
+	return 0;
+}
+
+static int pgd_walk(struct mm_struct 		*src_mm,
+		struct vm_area_struct 		*vma,
+		struct expose_pgtbl_args     	*args,
+		struct va_info        		*lst)
+{
+	int err;
+	unsigned long addr = vma->vm_start;
+	unsigned long end = vma->vm_end;
+	unsigned long usr_pgd_addr, next;
+
+	pgd_t *src_pgd = pgd_offset(src_mm, addr);
+
+	do{
+		next = pgd_addr_end(addr, end);
+
+		if (pgd_none_or_clear_bad(src_pgd))
+			continue;
+
+		if(src_pgd != lst->pgd){
+			args->fake_p4ds += PAGE_SIZE;
+			lst->pgd = src_pgd;
+		}
+
+		if( (err = p4d_walk(src_pgd, addr, next, vma, args, lst)) )
+			return err;
+
+		usr_pgd_addr = args->fake_pgd + pgd_index(addr);
+		if(copy_to_user((void *)usr_pgd_addr, 
+					&args->fake_p4ds, 
+					sizeof(unsigned long)))
+			return -EFAULT;
+
+	}while(src_pgd++, addr = next, addr != end);
 
 	return 0;
 }
