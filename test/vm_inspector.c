@@ -9,6 +9,11 @@
 
 #define __NR_get_pgtbl_layout 436
 #define __NR_expose_pgtbl_args 437
+
+/* copied from the kernel */
+#define get_index(address, shift) (((address) >> shift) & 511)
+
+
 #define PAGE_SIZE 4096
 
 struct expose_pgtbl_args {
@@ -61,10 +66,11 @@ int main(int argc, char **argv)
 {
 	struct expose_pgtbl_args args;
 	struct pagetable_layout_info pgtbl_info;
+	unsigned long pte_entries, pte_entry, fake_p4d_entry, fake_pmd_entry, fake_pud_entry;
+	unsigned long virt;
 	unsigned long va_begin, va_end;
 	pid_t pid;
-	int verbose;
-	int ret;
+	int verbose, ret;
 	void *temp_addr;
 
 	verbose = 0;
@@ -88,7 +94,7 @@ int main(int argc, char **argv)
 		sscanf(argv[4], "%lx", &va_end);
 	}
 
-	/*nonsense*/
+	/* nonsense */
 	if (va_begin >= va_end)
 		return -1;
 
@@ -101,8 +107,7 @@ int main(int argc, char **argv)
 	if (!(ret = get_pagetable_layout(&pgtbl_info)))
 			return ret;
 
-	
-	temp_addr = mmap(NULL, 5*PAGE_SIZE, PROT_READ, MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+	temp_addr = mmap(NULL, 5*PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
 	
 	if (temp_addr == MAP_FAILED)
 		return -1;
@@ -118,7 +123,38 @@ int main(int argc, char **argv)
 		return ret;
 
 	/* dump PTEs */
+	for (virt = va_begin; virt < va_end; virt += PAGE_SIZE)
+	{
+		if ((fake_p4d_entry = (&args.fake_pgd)[get_index(virt, pgtbl_info.pgdir_shift)]) == 0)
+			continue;
 
+		if ((fake_pmd_entry = (&fake_p4d_entry)[get_index(virt, pgtbl_info.p4d_shift)]) == 0)
+			continue;
+
+		if ((fake_pud_entry = (&fake_pmd_entry)[get_index(virt, pgtbl_info.pmd_shift)]) == 0)
+			continue;
+
+		if ((pte_entries = (&fake_pud_entry)[get_index(virt, pgtbl_info.pud_shift)]) == 0)
+			continue;
+
+		if ((pte_entry = (&pte_entries)[get_index(virt, pgtbl_info.page_shift)]) == 0)
+			continue;
+
+		if (pte_entry == 0)
+		{
+			if (verbose)
+				printf("0xdead00000000 0x00000000000 0 0 0 0\n");
+			continue;
+		}
+
+		printf("%#014lx %#013lx %d %d %d %d\n", 
+			virt,
+			get_phys_addr(pte_entry),
+			young_bit(pte_entry),
+			dirty_bit(pte_entry),
+			write_bit(pte_entry),
+			user_bit(pte_entry));
+	}
 	
 
 	return 0;
