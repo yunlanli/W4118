@@ -1,7 +1,10 @@
 #include <sys/mman.h>
 #include <sys/types.h>
+
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define __NR_expose 437
 #define PGD_SIZE 4096
@@ -43,6 +46,39 @@ static inline int user_bit(unsigned long pte_entry)
 
 int main(int argc, char **argv)
 {
+	// struct expose_pgtbl_args args;
+	unsigned long va_begin, va_end;
+	pid_t pid;
+	int verbose;
+
+	verbose = 0;
+
+	if (argc != 4 && argc != 5)
+		return -1;
+	else if (argc == 4) /* verbose mode TRUE */
+	{
+		printf("called");
+		pid = atoi(argv[1]);
+		sscanf(argv[2], "%lx", &va_begin);
+		sscanf(argv[3], "%lx", &va_end);
+	}
+	else if (argc == 5) /* verbose mode FALSE */
+	{
+		if (strcmp(argv[1], "-v") != 0)
+			return -1;
+		verbose = 1;
+		pid = atoi(argv[2]);
+		sscanf(argv[3], "%lx", &va_begin);
+		sscanf(argv[4], "%lx", &va_end);
+	}
+
+	/*nonsense*/
+	if (va_begin >= va_end)
+		return -1;
+
+	printf("argc %d, pid: %d, verbose: %d, va_begin: %#014lx, va_end: %#014lx\n", 
+		argc, pid, verbose, va_begin, va_end);
+
 	return 0;
 }
 
