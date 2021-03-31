@@ -16,8 +16,11 @@ static inline void init_base(struct expose_pgtbl_args *args)
 	args->page_table_addr -= PAGE_SIZE;
 }
 
-static inline int pte_copy(pmd_t *pmd, struct vm_area_struct *vma,
-		struct expose_pgtbl_args *args, struct va_info *lst)
+static inline int pte_copy(pmd_t *pmd, 
+		struct mm_struct *src_mm,
+		struct vm_area_struct *vma,
+		struct expose_pgtbl_args *args,
+		struct va_info *lst)
 {
 	unsigned long pfn = pmd_pfn(*pmd);
 	unsigned long user_pte_addr = args->page_table_addr;
@@ -40,6 +43,7 @@ static inline int pte_copy(pmd_t *pmd, struct vm_area_struct *vma,
 static inline int pmd_walk(pud_t *src_pud,
 		unsigned long addr,
 		unsigned long end,
+		struct mm_struct *src_mm,
 		struct vm_area_struct *vma,
 		struct expose_pgtbl_args *args,
 		struct va_info *lst)
@@ -76,7 +80,7 @@ static inline int pmd_walk(pud_t *src_pud,
 			printk(KERN_DEBUG "----[pmd_walk] new pte table=%ld\n", 
 					args->page_table_addr);
 
-			if( (err = pte_copy(src_pmd, vma, args, lst)) )
+			if( (err = pte_copy(src_pmd, src_mm, vma, args, lst)) )
 				return err;
 			
 			usr_pmd_addr = args->fake_pmds + pmd_index(addr);
@@ -98,6 +102,7 @@ static inline int pmd_walk(pud_t *src_pud,
 static inline int pud_walk(p4d_t 		*src_p4d,
 		unsigned long                	addr,
 		unsigned long                	end,
+		struct mm_struct		*src_mm,
 		struct vm_area_struct        	*vma,
 		struct expose_pgtbl_args     	*args,
 		struct va_info        		*lst)
@@ -137,7 +142,7 @@ static inline int pud_walk(p4d_t 		*src_p4d,
 		 * if we are in the same pmd table or not
 		 * because we could be using a different pmd_entry on the next level
 		 */
-		if( (err = pmd_walk(src_pud, addr, next, vma, args, lst)) )
+		if( (err = pmd_walk(src_pud, addr, next, src_mm, vma, args, lst)) )
 			return err;
 		
 		/* 2. now we put the fake_pmd_addr to usr_pud_addr */
@@ -160,6 +165,7 @@ static inline int pud_walk(p4d_t 		*src_p4d,
 static inline int p4d_walk(pgd_t		*src_pgd,
 		unsigned long                	addr,
 		unsigned long                	end,
+		struct mm_struct		*src_mm,
 		struct vm_area_struct        	*vma,
 		struct expose_pgtbl_args     	*args,
 		struct va_info        		*lst)
@@ -169,7 +175,7 @@ static inline int p4d_walk(pgd_t		*src_pgd,
 	unsigned long usr_p4d_addr, next;
 
 	if (CONFIG_PGTABLE_LEVELS == 4)
-		return pud_walk((p4d_t *)src_pgd, addr, end, vma, args, lst);
+		return pud_walk((p4d_t *)src_pgd, addr, end, src_mm, vma, args, lst);
 
 	do{
 		next = p4d_addr_end(addr, end);
@@ -187,7 +193,7 @@ static inline int p4d_walk(pgd_t		*src_pgd,
 		
 		printk(KERN_DEBUG "--[p4d_walk] walking addr=%ld\n", addr);
 
-		if( (err = pud_walk(src_p4d, addr, next, vma, args, lst)) )
+		if( (err = pud_walk(src_p4d, addr, next, src_mm, vma, args, lst)) )
 			return err;
 
 		usr_p4d_addr = args->fake_p4ds + p4d_index(addr);
@@ -208,13 +214,13 @@ static inline int p4d_walk(pgd_t		*src_pgd,
 
 static inline int pgd_walk(unsigned long addr,
 		unsigned long end,
+		struct mm_struct *src_mm,
 		struct vm_area_struct *vma,
 		struct expose_pgtbl_args *args,
 		struct va_info *lst)
 {
 	int err;
 	unsigned long usr_pgd_addr, next;
-	struct mm_struct *src_mm = vma->vm_mm;
 
 	pgd_t *src_pgd = pgd_offset(src_mm, addr);
 
@@ -234,7 +240,7 @@ static inline int pgd_walk(unsigned long addr,
 		
 		printk(KERN_DEBUG "-[pgd_walk] walking addr=%ld\n", addr);
 
-		if( (err = p4d_walk(src_pgd, addr, next, vma, args, lst)) )
+		if( (err = p4d_walk(src_pgd, addr, next, src_mm, vma, args, lst)) )
 			return err;
 
 		usr_pgd_addr = args->fake_pgd + pgd_index(addr);
@@ -305,7 +311,7 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 		addr = vma->vm_start < addr ? addr : vma->vm_start;
 		end = vma->vm_end < kargs.end_vaddr ? vma->vm_end : kargs.end_vaddr;
 
-		if ((err = pgd_walk(addr, end, vma, &kargs, &lst)))
+		if ((err = pgd_walk(addr, end, mm, vma, &kargs, &lst)))
 			return err;
 
 	} while (addr = vma->vm_end, addr <= kargs.end_vaddr);
