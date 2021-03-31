@@ -27,7 +27,7 @@ static inline int pte_copy(pmd_t *pmd,
 	unsigned long user_pte_addr = args->page_table_addr;
 	struct vm_area_struct *user_vma = find_vma(current->mm, user_pte_addr);
 	
-	up_read(mm->mmap_sem);
+	up_read(&src_mm->mmap_sem);
 	down_write(&current->mm->mmap_sem);
 
 	printk(KERN_DEBUG "-----[pte_copy] to_addr=%ld with pfn=%ld\n", 
@@ -37,7 +37,7 @@ static inline int pte_copy(pmd_t *pmd,
 	
 
 	up_write(&current->mm->mmap_sem);
-	down_read(mm->mmap_sem);
+	down_read(&src_mm->mmap_sem);
 
 	return ret;
 }
@@ -308,8 +308,6 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 
 	p = pid == -1 ? current : find_task_by_vpid(pid);
 	mm = p->mm;
-	
-	down_read(mm->mmap_sem);
 
 	down_read(&mm->mmap_sem);
 
@@ -329,8 +327,6 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 
 	} while (addr = vma->vm_end, addr <= kargs.end_vaddr);
 	
-	up_read(mm->mmap_sem);
-
 out:
 	up_read(&mm->mmap_sem);
 	return 0;
