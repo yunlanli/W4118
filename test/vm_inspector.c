@@ -1,15 +1,38 @@
 #include "expose_pgtbl.h"
 
+/* Assumes start and end page aligned */
+void compute_pgtbl_num(unsigned long start, unsigned long end, int level, struct pagetable_num_info *info, struct pagetable_layout_info *layout)
+{
+# if 0
+	int p4d_entries = layout->pgdir_shift == layout->p4d_shift ? 0 : 1 << (layout->pgdir_shift - layout->p4d_shift);
+	int pud_entries = 1 << (layout->p4d_shift - layout->pud_shift);
+	int pmd_entries = 1 << (layout->pud_shift - layout->pmd_shift);
+	int page_shift_entries = 1 << (layout->pmd_shift - layout->page_shift);
+	int page_entries = 1 << (layout->page_shift);
+# endif
+	int num_pages = (end - start) >> (layout->page_shift);
+	int num_pte = num_pages >> (layout->pmd_shift - layout->page_shift);
+	int num_pmd = num_pte >> (layout->pud_shift - layout->pmd_shift);
+	int num_pud = num_pmd >> (layout->p4d_shift - layout->pud_shift);
+	int num_p4d = num_pud >> (layout->pgdir_shift - layout->p4d_shift);
+
+	info->p4d_num = level==5? num_p4d == 0? 1 : num_p4d : 0;
+	info->pud_num = num_pud == 0? 1 : num_pud;
+	info->pmd_num = num_pmd == 0? 1 : num_pmd;
+	info->pte_num = num_pte == 0? 1 : num_pte;
+}
+
 int main(int argc, char **argv)
 {
 	struct expose_pgtbl_args args;
 	struct pagetable_layout_info pgtbl_info;
+	struct pagetable_num_info num_info;
 	unsigned long pte_entries, pte_entry, fake_p4d_entry, fake_pmd_entry, fake_pud_entry;
 	unsigned long virt;
 	unsigned long va_begin, va_end;
 	pid_t pid;
-	int verbose, ret;
 	int level;
+	int verbose, ret, total_page;
 	void *temp_addr;
 
 	verbose = 0;
@@ -46,8 +69,12 @@ int main(int argc, char **argv)
 
 	level = get_kernel_pglevel(&pgtbl_info);
 
-	temp_addr = mmap(NULL, 6*PAGE_SIZE, PROT_READ | PROT_WRITE,
-			MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	compute_pgtbl_num(va_begin, va_end, level, &num_info, &pgtbl_info);
+	total_page = 1 + num_info.p4d_num + num_info.pmd_num + num_info.pud_num + num_info.pte_num;
+
+	printf("total = %d\n", total_page);
+
+	temp_addr = mmap(NULL, total_page * PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
 	
 	if (temp_addr == MAP_FAILED)
 		return -1;
@@ -57,9 +84,9 @@ int main(int argc, char **argv)
 	if (level == 5)
 		args.fake_p4ds += PAGE_SIZE;
 
-	args.fake_puds = args.fake_p4ds + PAGE_SIZE;
-	args.fake_pmds = args.fake_puds + PAGE_SIZE;
-	args.page_table_addr = args.fake_pmds + PAGE_SIZE;
+	args.fake_puds = args.fake_p4ds + PAGE_SIZE * num_info.p4d_num;
+	args.fake_pmds = args.fake_puds + PAGE_SIZE * num_info.pud_num;
+	args.page_table_addr = args.fake_pmds + PAGE_SIZE * num_info.pmd_num;
 
 	fprintf(stderr,
 		"fake_pgd: %lx\n"

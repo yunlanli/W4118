@@ -35,6 +35,13 @@ struct expose_pgtbl_args {
 	unsigned long end_vaddr;
 };
 
+struct pagetable_num_info {
+	uint32_t p4d_num;
+	uint32_t pud_num;
+	uint32_t pmd_num;
+	uint32_t pte_num;
+};
+
 /* Kernel util Macros & Functions */
 #define get_index(address, shift) (((address) >> shift) & 511)
 #define PAGE_SIZE 4096
