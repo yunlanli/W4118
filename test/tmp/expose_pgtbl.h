@@ -90,7 +90,7 @@ static inline void print_pgtbl_info(struct pagetable_layout_info *pgtbl_info)
 		"\n"
 		"PGD_SHIFT	P4D_SHIFT	PUD_SHIFT	PMD_SHIFT	PAGE_SHIFT\n"
 		"---------	---------	---------	---------	----------\n"
-		"   %u		   %u		   %u		   %u		    %u	  \n"
+		"   %u		   %u		   %u		   %u		    %u\n"
 		"\n",
 		pgtbl_info->pgdir_shift,
 		pgtbl_info->p4d_shift,

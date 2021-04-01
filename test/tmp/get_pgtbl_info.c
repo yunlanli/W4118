@@ -1,6 +1,6 @@
 #include "expose_pgtbl.h"
 
-int main()
+int main(void)
 {
 	struct pagetable_layout_info pgtbl_info;
 

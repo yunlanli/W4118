@@ -90,7 +90,7 @@ static inline void print_pgtbl_info(struct pagetable_layout_info *pgtbl_info)
 		"\n"
 		"PGD_SHIFT	P4D_SHIFT	PUD_SHIFT	PMD_SHIFT	PAGE_SHIFT\n"
 		"---------	---------	---------	---------	----------\n"
-		"   %u		   %u		   %u		   %u		    %u	  \n"
+		"   %u		   %u		   %u		   %u		    %u\n"
 		"\n",
 		pgtbl_info->pgdir_shift,
 		pgtbl_info->p4d_shift,
@@ -105,7 +105,8 @@ static inline int get_kernel_pglevel(struct pagetable_layout_info *pgtbl_info)
 }
 
 static inline
-unsigned long pgd_index(unsigned long addr, struct pagetable_layout_info *pgtbl_info)
+unsigned long pgd_index(unsigned long addr,
+		struct pagetable_layout_info *pgtbl_info)
 {
 	return get_index(addr, pgtbl_info->pgdir_shift) * sizeof(unsigned long);
 }
@@ -126,7 +127,8 @@ unsigned long pgd_entry(unsigned long addr, unsigned long pgd,
 }
 
 static inline
-unsigned long p4d_index(unsigned long addr, struct pagetable_layout_info *pgtbl_info)
+unsigned long p4d_index(unsigned long addr,
+		struct pagetable_layout_info *pgtbl_info)
 {
 	return get_index(addr, pgtbl_info->p4d_shift) * sizeof(unsigned long);
 }
@@ -146,7 +148,8 @@ unsigned long p4d_entry(unsigned long addr, unsigned long p4d,
 }
 
 static inline
-unsigned long pud_index(unsigned long addr, struct pagetable_layout_info *pgtbl_info)
+unsigned long pud_index(unsigned long addr,
+		struct pagetable_layout_info *pgtbl_info)
 {
 	return get_index(addr, pgtbl_info->pud_shift) * sizeof(unsigned long);
 }
@@ -166,7 +169,8 @@ unsigned long pud_entry(unsigned long addr, unsigned long pud,
 }
 
 static inline
-unsigned long pmd_index(unsigned long addr, struct pagetable_layout_info *pgtbl_info)
+unsigned long pmd_index(unsigned long addr,
+		struct pagetable_layout_info *pgtbl_info)
 {
 	return get_index(addr, pgtbl_info->pmd_shift) * sizeof(unsigned long);
 }
@@ -186,7 +190,8 @@ unsigned long pmd_entry(unsigned long addr, unsigned long pmd,
 }
 
 static inline
-unsigned long pte_index(unsigned long addr, struct pagetable_layout_info *pgtbl_info)
+unsigned long pte_index(unsigned long addr,
+		struct pagetable_layout_info *pgtbl_info)
 {
 	return get_index(addr, pgtbl_info->page_shift) * sizeof(unsigned long);
 }
