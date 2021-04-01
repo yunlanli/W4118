@@ -1,6 +1,7 @@
 #include <linux/syscalls.h>
 #include <linux/printk.h>
 #include <linux/types.h>
+#include <linux/hugetlb_inline.h>
 #include <linux/expose_pgtbl.h>
 
 /*
@@ -340,6 +341,9 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 		/* no vma is found */
 		if (vma == NULL || (vma->vm_start > kargs.end_vaddr))
 			goto out;
+
+		if (unlikely(is_vm_hugetlb_page(vma)))
+			continue;
 
 		/* our start vaddr @addr is the max of @vma->vm_start, @addr */
 		addr = vma->vm_start < addr ? addr : vma->vm_start;
