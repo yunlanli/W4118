@@ -71,6 +71,7 @@ int main(int argc, char **argv)
 	unsigned long va_begin, va_end;
 	pid_t pid;
 	int verbose, ret;
+	int level = 5;
 	void *temp_addr;
 
 	verbose = 0;
@@ -79,7 +80,6 @@ int main(int argc, char **argv)
 		return -1;
 	else if (argc == 4) /* verbose mode TRUE */
 	{
-		printf("called");
 		pid = atoi(argv[1]);
 		sscanf(argv[2], "%lx", &va_begin);
 		sscanf(argv[3], "%lx", &va_end);
@@ -101,16 +101,17 @@ int main(int argc, char **argv)
 	args.begin_vaddr = va_begin;
 	args.end_vaddr = va_end;
 
-	printf("argc %d, pid: %d, verbose: %d, va_begin: %#014lx, va_end: %#014lx\n", 
-		argc, pid, verbose, va_begin, va_end);
-
-	if ((ret = get_pagetable_layout(&pgtbl_info)))
+	if ((ret = get_pagetable_layout(&pgtbl_info)) != 0)
 			return ret;
+	printf("[ info ]  get_pagetable_layout\n");
+	if (pgtbl_info.pgdir_shift == pgtbl_info.p4d_shift)
+		level = 4;
 
-	temp_addr = mmap(NULL, 5*PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
+	temp_addr = mmap(NULL, level*PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
 	
 	if (temp_addr == MAP_FAILED)
 		return -1;
+
 	args.fake_pgd = (unsigned long) temp_addr;
 	args.fake_p4ds = args.fake_pgd + PAGE_SIZE;
 	args.fake_puds = args.fake_p4ds + PAGE_SIZE;
@@ -118,46 +119,48 @@ int main(int argc, char **argv)
 	args.page_table_addr = args.fake_pmds + PAGE_SIZE;
 
 	fprintf(stderr,
-			"pgd: %lu\n"
-			"p4d: %lu\n"
-			"pud: %lu\n"
-			"pmd: %lu\n"
-			"pte: %lu\n",
-			args.fake_pgd,
-			args.fake_p4ds, 
-			args.fake_pmds, args.fake_puds, args.page_table_addr);
-
-
-	printf("[ info ] expose_page_table\n");
+		"fake_pgd: %lu\n"
+		"fake_p4d: %lu\n"
+		"fake_pud: %lu\n"
+		"fake_pmd: %lu\n"
+		"fake_pte: %lu\n",
+		args.fake_pgd,
+		args.fake_p4ds, 
+		args.fake_pmds, 
+		args.fake_puds, 
+		args.page_table_addr);
 
 	/* syscalls */
 	if ((ret = expose_page_table(pid, &args)))
 		return ret;
 
+	printf("[ info ] expose_page_table\n");
+
 	/* dump PTEs */
 	printf("[ info ] dump ptes\n");
 	for (virt = va_begin; virt < va_end; virt += PAGE_SIZE)
 	{
-		fake_p4d_entry = args.fake_pgd+get_index(virt, pgtbl_info.pgdir_shift);
-		if (fake_p4d_entry == 0){
-			printf("[ info ] pgd_index=%ld   "
-				"args.fake_pgd=%p\n", 
-				get_index(virt, pgtbl_info.pgdir_shift),
-				(void *)args.fake_pgd);
+
+		if ((fake_p4d_entry = args.fake_pgd + get_index(virt, pgtbl_info.pgdir_shift)) == 0)
 			continue;
-		}
 		printf("[ info ] fake_p4d_entry=%ld\n", fake_p4d_entry);
+		if (level == 5) {
+			if ((fake_pud_entry = fake_p4d_entry + get_index(virt, pgtbl_info.p4d_shift)) == 0)
+				continue;
+		}
+		else
+			fake_pud_entry = fake_p4d_entry;
+		printf("[ info ] fake_pud_entry=%ld\n", fake_pud_entry);
 
-		if ((fake_pud_entry = (&fake_p4d_entry)[get_index(virt, pgtbl_info.p4d_shift)]) == 0)
+		if ((fake_pmd_entry = fake_pud_entry + get_index(virt, pgtbl_info.pud_shift)) == 0)
 			continue;
+		printf("[ info ] fake_pmd_entry=%ld\n", fake_pmd_entry);
 
-		if ((fake_pmd_entry = (&fake_pud_entry)[get_index(virt, pgtbl_info.pud_shift)]) == 0)
+		if ((pte_entries = fake_pmd_entry + get_index(virt, pgtbl_info.pmd_shift)) == 0)
 			continue;
+		printf("[ info ] pte_entries=%ld\n", pte_entries);
 
-		if ((pte_entries = (&fake_pmd_entry)[get_index(virt, pgtbl_info.pmd_shift)]) == 0)
-			continue;
-
-		if ((pte_entry = (&pte_entries)[get_index(virt, pgtbl_info.page_shift)]) == 0)
+		if ((pte_entry = pte_entries + get_index(virt, pgtbl_info.page_shift)) == 0)
 		{
 			if (verbose)
 				printf("0xdead00000000 0x00000000000 0 0 0 0\n");
