@@ -245,7 +245,7 @@ static inline int pgd_walk(unsigned long addr,
 		struct va_info *lst)
 {
 	int err;
-	unsigned long usr_pgd_addr, next;
+	unsigned long usr_pgd_addr, next, src_addr;
 
 	pgd_t *src_pgd = pgd_offset(src_mm, addr);
 
@@ -278,8 +278,11 @@ static inline int pgd_walk(unsigned long addr,
 				args->fake_p4ds,
 				usr_pgd_addr);
 
+		src_addr = CONFIG_PGTABLE_LEVELS == 4 ? 
+			args->fake_puds : args->fake_p4ds;
+
 		if(copy_to_user((void *)usr_pgd_addr, 
-					&args->fake_p4ds, 
+					&src_addr, 
 					sizeof(unsigned long)))
 			return -EFAULT;
 
