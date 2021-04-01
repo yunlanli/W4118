@@ -32,7 +32,7 @@ static inline int pte_copy(pmd_t *pmd,
 	up_read(&src_mm->mmap_sem);
 	down_write(&current->mm->mmap_sem);
 
-	printk(KERN_DEBUG "-----[pte_copy] to_addr=%ld with pfn=%ld\n", 
+	printk(KERN_DEBUG "-----[pte_copy] to_addr=%lx with pfn=%lx\n", 
 			user_pte_addr,
 			pfn);
 	ret = remap_pfn_range(user_vma, user_pte_addr, pfn, PAGE_SIZE, vma->vm_page_prot);
@@ -72,14 +72,14 @@ static inline int pmd_walk(pud_t *src_pud,
 	do{
 		next = pmd_addr_end(addr, end);
 
-		printk(KERN_DEBUG "?---[pmd_walk] with addr=%ld, next=%ld\n", 
+		printk(KERN_DEBUG "?---[pmd_walk] with addr=%lx, next=%lx\n", 
 				addr, next);
 
 		/* no pte table to be copied, continue */
 		if (pmd_none_or_clear_bad(src_pmd))
 			continue;
 		
-		printk(KERN_DEBUG ".---[pmd_walk] with addr=%ld, next=%ld\n", 
+		printk(KERN_DEBUG ".---[pmd_walk] with addr=%lx, next=%lx\n", 
 				addr, next);
 
 		/* 
@@ -93,7 +93,7 @@ static inline int pmd_walk(pud_t *src_pud,
 			args->page_table_addr += PAGE_SIZE;
 			lst->pmd = src_pmd;
 		
-			printk(KERN_DEBUG "----[pmd_walk] new pte table=%ld\n", 
+			printk(KERN_DEBUG "----[pmd_walk] new pte table=%lx\n", 
 					args->page_table_addr);
 
 			if( (err = pte_copy(src_pmd, src_mm, vma, args, lst)) )
@@ -101,7 +101,7 @@ static inline int pmd_walk(pud_t *src_pud,
 			
 			usr_pmd_addr = args->fake_pmds + pmd_index(addr);
 			
-			printk(KERN_DEBUG "----[pmd_walk] copying=%ld to %ld\n", 
+			printk(KERN_DEBUG "----[pmd_walk] copying=%lx to %lx\n", 
 					args->page_table_addr,
 					usr_pmd_addr);
 
@@ -130,7 +130,7 @@ static inline int pud_walk(p4d_t 		*src_p4d,
 	do{
 		next = pud_addr_end(addr, end);
 		
-		printk(KERN_DEBUG "?--[pud_walk] walking addr=%ld, next=%ld\n", 
+		printk(KERN_DEBUG "?--[pud_walk] walking addr=%lx, next=%lx\n", 
 				addr, next);
 
 		if (pud_none_or_clear_bad(src_pud))
@@ -150,11 +150,11 @@ static inline int pud_walk(p4d_t 		*src_p4d,
 			args->fake_pmds += PAGE_SIZE;
 			lst->pud = src_pud;
 			
-			printk(KERN_DEBUG "---[pud_walk] new pmd table=%ld\n", 
+			printk(KERN_DEBUG "---[pud_walk] new pmd table=%lx\n", 
 					args->fake_pmds);
 		}
 			
-		printk(KERN_DEBUG ".--[pud_walk] walking addr=%ld, next=%ld\n", 
+		printk(KERN_DEBUG ".--[pud_walk] walking addr=%lx, next=%lx\n", 
 				addr, next);
 
 		/* 
@@ -168,7 +168,7 @@ static inline int pud_walk(p4d_t 		*src_p4d,
 		/* 2. now we put the fake_pmd_addr to usr_pud_addr */
 		usr_pud_addr = args->fake_pmds + pmd_index(addr);
 		
-		printk(KERN_DEBUG "---[pud_walk] copying=%ld to %ld\n", 
+		printk(KERN_DEBUG "---[pud_walk] copying=%lx to %lx\n", 
 				args->fake_pmds,
 				usr_pud_addr);
 
@@ -200,7 +200,7 @@ static inline int p4d_walk(pgd_t		*src_pgd,
 	do{
 		next = p4d_addr_end(addr, end);
 		
-		printk(KERN_DEBUG "?-[p4d_walk] walking addr=%ld, next-%ld\n", 
+		printk(KERN_DEBUG "?-[p4d_walk] walking addr=%lx, next-%lx\n", 
 				addr, next);
 
 		if (p4d_none_or_clear_bad(src_p4d))
@@ -210,11 +210,11 @@ static inline int p4d_walk(pgd_t		*src_pgd,
 			args->fake_puds += PAGE_SIZE;
 			lst->p4d = src_p4d;
 			
-			printk(KERN_DEBUG "--[p4d_walk] new pud table=%ld\n", 
+			printk(KERN_DEBUG "--[p4d_walk] new pud table=%lx\n", 
 					args->fake_puds);
 		}
 		
-		printk(KERN_DEBUG "--[p4d_walk] walking addr=%ld, next-%ld\n", 
+		printk(KERN_DEBUG "--[p4d_walk] walking addr=%lx, next-%lx\n", 
 				addr, next);
 
 		if( (err = pud_walk(src_p4d, addr, next, src_mm, vma, args, lst)) )
@@ -222,7 +222,7 @@ static inline int p4d_walk(pgd_t		*src_pgd,
 
 		usr_p4d_addr = args->fake_p4ds + p4d_index(addr);
 		
-		printk(KERN_DEBUG ".-[p4d_walk] copying=%ld to %ld\n", 
+		printk(KERN_DEBUG ".-[p4d_walk] copying=%lx to %lx\n", 
 				args->fake_puds,
 				usr_p4d_addr);
 
@@ -251,7 +251,7 @@ static inline int pgd_walk(unsigned long addr,
 	do{
 		next = pgd_addr_end(addr, end);
 		
-		printk(KERN_DEBUG "?[pgd_walk] walking addr=%ld, next=%ld\n", 
+		printk(KERN_DEBUG "?[pgd_walk] walking addr=%lx, next=%lx\n", 
 				addr, next);
 
 		if (pgd_none_or_clear_bad(src_pgd))
@@ -261,11 +261,11 @@ static inline int pgd_walk(unsigned long addr,
 			args->fake_p4ds += PAGE_SIZE;
 			lst->pgd = src_pgd;
 			
-			printk(KERN_DEBUG "-[pgd_walk] new p4d table=%ld\n", 
+			printk(KERN_DEBUG "-[pgd_walk] new p4d table=%lx\n", 
 					args->fake_p4ds);
 		}
 		
-		printk(KERN_DEBUG ".[pgd_walk] walking addr=%ld, next=%ld\n", 
+		printk(KERN_DEBUG ".[pgd_walk] walking addr=%lx, next=%lx\n", 
 				addr, next);
 
 		if( (err = p4d_walk(src_pgd, addr, next, src_mm, vma, args, lst)) )
@@ -273,7 +273,7 @@ static inline int pgd_walk(unsigned long addr,
 
 		usr_pgd_addr = args->fake_pgd + pgd_index(addr);
 		
-		printk(KERN_DEBUG "-[pgd_walk] copying=%ld to %ld\n", 
+		printk(KERN_DEBUG "-[pgd_walk] copying=%lx to %lx\n", 
 				args->fake_p4ds,
 				usr_pgd_addr);
 
@@ -334,7 +334,7 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 	do {
 		vma = find_vma(mm, addr);
 		
-		printk(KERN_DEBUG "?[vma_walk] walking addr=%ld, end=%ld\n", 
+		printk(KERN_DEBUG "?[vma_walk] walking addr=%lx, end=%lx\n", 
 				addr, kargs.end_vaddr);
 
 		/* no vma is found */
@@ -345,7 +345,7 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 		addr = vma->vm_start < addr ? addr : vma->vm_start;
 		end = vma->vm_end < kargs.end_vaddr ? vma->vm_end : kargs.end_vaddr;
 		
-		printk(KERN_DEBUG ".[vma_walk] walking addr=%ld, end=%ld\n", 
+		printk(KERN_DEBUG ".[vma_walk] walking addr=%lx, end=%lx\n", 
 				addr, kargs.end_vaddr);
 		
 		if ((err = pgd_walk(addr, end, mm, vma, &kargs, &lst)))
