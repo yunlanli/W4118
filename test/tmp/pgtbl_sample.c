@@ -1,4 +1,5 @@
 #include "expose_pgtbl.h"
+#define PAGE_MASK (~511)
 
 void *malloc_stuff(int size, void *start, int offset){
 	int *addr;
@@ -61,8 +62,9 @@ int main(int argc, char **argv)
 
 	int pte_away = 4096;
 	int pte_table_away = pte_away * PAGE_SIZE;
-	
-	tmp_addr = malloc_stuff(size, tmp_addr+2*pte_table_away, 0);
+	unsigned long masked_address = (unsigned long)(tmp_addr+2*pte_table_away) & PAGE_MASK;
+
+	tmp_addr = malloc_stuff(size, (void *)masked_address, 0);
 
 		
 	while (1) {
