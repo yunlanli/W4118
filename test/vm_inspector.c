@@ -27,7 +27,7 @@ int main(int argc, char **argv)
 	struct expose_pgtbl_args args;
 	struct pagetable_layout_info pgtbl_info;
 	struct pagetable_num_info num_info;
-	unsigned long pte_entries, pte_entry, fake_p4d_entry, fake_pmd_entry, fake_pud_entry;
+	unsigned long pte_t, pteval, fake_p4d, fake_pmd, fake_pud;
 	unsigned long virt;
 	unsigned long va_begin, va_end;
 	pid_t pid;
@@ -84,7 +84,7 @@ int main(int argc, char **argv)
 	if (level == 5)
 		args.fake_p4ds += PAGE_SIZE;
 
-	args.fake_puds = args.fake_p4ds + PAGE_SIZE * num_info.p4d_num;
+	args.fake_puds = args.fake_p4ds + PAGE_SIZE * (num_info.p4d_num ? num_info.p4d_num : 1);
 	args.fake_pmds = args.fake_puds + PAGE_SIZE * num_info.pud_num;
 	args.page_table_addr = args.fake_pmds + PAGE_SIZE * num_info.pmd_num;
 
@@ -96,8 +96,8 @@ int main(int argc, char **argv)
 		"page_table_addr: %lx\n",
 		args.fake_pgd,
 		args.fake_p4ds, 
-		args.fake_pmds, 
 		args.fake_puds, 
+		args.fake_pmds, 
 		args.page_table_addr);
 
 	/* syscalls 437 */
@@ -107,56 +107,57 @@ int main(int argc, char **argv)
 
 	/* dump PTEs */
 	printf("[ info ] dumping ptes...\n");
-	for (virt = va_begin; virt < va_end; virt += PAGE_SIZE)
+	for (virt = va_begin & PAGE_MASK; virt < va_end; virt += PAGE_SIZE)
 	{
-		if ((fake_p4d_entry =
-			*((unsigned long *)(args.fake_pgd) + get_index(virt, pgtbl_info.pgdir_shift))) == 0)
-			continue;
-		
-		printf("[ info ] pgd_entry_addr=%p\n", 
-				(unsigned long *)(args.fake_pgd) + get_index(virt, pgtbl_info.pgdir_shift));
-		printf("[ info ] p4d_entry=%lx\n", fake_p4d_entry);
-		
-		if (level == 5) {
-			if ((fake_pud_entry =
-				*((unsigned long *)(args.fake_p4ds) + get_index(virt, pgtbl_info.p4d_shift))) == 0)
-				continue;
-		}
+		/* pgd */
+		if (!(fake_p4d = pgd_entry(virt, args.fake_pgd, &pgtbl_info)))
+			goto verbose;
+
+		printf("[ info ] pgd_entry_addr=%p\n",
+				pgd_offset(virt, args.fake_pgd, &pgtbl_info));
+		printf("[ info ] p4d_t=%lx\n", fake_p4d);
+
+
+		/* p4d */
+		if (level == 5 &&
+				!(fake_pud = p4d_entry(virt, fake_p4d, &pgtbl_info)))
+			goto verbose;
 		else
-			fake_pud_entry = fake_p4d_entry;
-		
-		printf("[ info ] pud_table_addr=%lx\n", fake_pud_entry);
-		
-		printf("[ info ] pud_table_index=%lx\n", get_index(virt, pgtbl_info.pud_shift));
-		printf("[ info ] pud_entry_addr=%lx\n", 
-				(fake_pud_entry) + 8* get_index(virt, pgtbl_info.pud_shift));
-			
-		if ((fake_pmd_entry = 
-			*((unsigned long *)(fake_pud_entry) + get_index(virt, pgtbl_info.pud_shift))) == 0)
-			continue;
-		printf("[ info ] pmd_table_addr=%lx\n", fake_pmd_entry);
-		
-		if ((pte_entries = 
-			*((unsigned long *)(fake_pmd_entry) + get_index(virt, pgtbl_info.pmd_shift))) == 0)
-			continue;
-		printf("[ info ] pte_entries=%lx\n", pte_entries);
-		
-		if ((pte_entry = 
-			*((unsigned long *)(pte_entries) + get_index(virt, pgtbl_info.page_shift))) == 0)
-		{
-			if (verbose)
-				printf("0xdead00000000 0x00000000000 0 0 0 0\n");
-			continue;
-		}
-		printf("[ info ] pte_entry=%lx\n", pte_entry);
+			fake_pud = fake_p4d;
+		printf("[ info ] pud_t=%lx\n", fake_pud);
+
+
+		/* pud */
+		if (!(fake_pmd = pud_entry(virt, fake_pud, &pgtbl_info)))
+			goto verbose;
+		printf("[ info ] pmd_t=%lx\n", fake_pmd);
+
+
+		/* pmd */
+		if (!(pte_t = pmd_entry(virt, fake_pmd, &pgtbl_info)))
+			goto verbose;
+		printf("[ info ] pte_t=%lx\n", pte_t);
+
+		if (!(pteval = pte_entry(virt, pte_t, &pgtbl_info)))
+			goto verbose;
+
+		printf("[ info ] pteval=%lx\n", pteval);
 
 		printf("%#014lx %#013lx %d %d %d %d\n", 
-			virt,
-			get_phys_addr(pte_entry),
-			young_bit(pte_entry),
-			dirty_bit(pte_entry),
-			write_bit(pte_entry),
-			user_bit(pte_entry));
+				virt,
+				get_phys_addr(pteval),
+				young_bit(pteval),
+				dirty_bit(pteval),
+				write_bit(pteval),
+				user_bit(pteval));
+		goto out;
+
+verbose:
+		if (verbose)
+			printf("0xdead00000000 0x00000000000 0 0 0 0\n");
+out:
+		fprintf(stderr, "vaddr: %lx\n", virt);
+		continue;
 	}
 	
 

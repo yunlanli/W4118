@@ -103,4 +103,105 @@ static inline int get_kernel_pglevel(struct pagetable_layout_info *pgtbl_info)
 {
 	return pgtbl_info->pgdir_shift == pgtbl_info->p4d_shift ? 4 : 5;
 }
+
+static inline
+unsigned long pgd_index(unsigned long addr, struct pagetable_layout_info *pgtbl_info)
+{
+	return get_index(addr, pgtbl_info->pgdir_shift) * sizeof(unsigned long);
+}
+
+static inline
+unsigned long *pgd_offset(unsigned long addr, unsigned long pgd,
+		struct pagetable_layout_info	*pgtbl_info)
+{
+	return  (unsigned long *) (pgd + pgd_index(addr, pgtbl_info));
+}
+
+
+static inline
+unsigned long pgd_entry(unsigned long addr, unsigned long pgd,
+		struct pagetable_layout_info	*pgtbl_info)
+{
+	return *pgd_offset(addr, pgd, pgtbl_info);
+}
+
+static inline
+unsigned long p4d_index(unsigned long addr, struct pagetable_layout_info *pgtbl_info)
+{
+	return get_index(addr, pgtbl_info->p4d_shift) * sizeof(unsigned long);
+}
+
+static inline
+unsigned long *p4d_offset(unsigned long addr, unsigned long p4d,
+		struct pagetable_layout_info	*pgtbl_info)
+{
+	return  (unsigned long *) (p4d + p4d_index(addr, pgtbl_info));
+}
+
+static inline
+unsigned long p4d_entry(unsigned long addr, unsigned long p4d,
+		struct pagetable_layout_info	*pgtbl_info)
+{
+	return *p4d_offset(addr, p4d, pgtbl_info);
+}
+
+static inline
+unsigned long pud_index(unsigned long addr, struct pagetable_layout_info *pgtbl_info)
+{
+	return get_index(addr, pgtbl_info->pud_shift) * sizeof(unsigned long);
+}
+
+static inline
+unsigned long *pud_offset(unsigned long addr, unsigned long pud,
+		struct pagetable_layout_info	*pgtbl_info)
+{
+	return  (unsigned long *) (pud + pud_index(addr, pgtbl_info));
+}
+
+static inline
+unsigned long pud_entry(unsigned long addr, unsigned long pud,
+		struct pagetable_layout_info	*pgtbl_info)
+{
+	return *pud_offset(addr, pud, pgtbl_info);
+}
+
+static inline
+unsigned long pmd_index(unsigned long addr, struct pagetable_layout_info *pgtbl_info)
+{
+	return get_index(addr, pgtbl_info->pmd_shift) * sizeof(unsigned long);
+}
+
+static inline
+unsigned long *pmd_offset(unsigned long addr, unsigned long pmd,
+		struct pagetable_layout_info	*pgtbl_info)
+{
+	return  (unsigned long *) (pmd + pmd_index(addr, pgtbl_info));
+}
+
+static inline
+unsigned long pmd_entry(unsigned long addr, unsigned long pmd,
+		struct pagetable_layout_info	*pgtbl_info)
+{
+	return *pmd_offset(addr, pmd, pgtbl_info);
+}
+
+static inline
+unsigned long pte_index(unsigned long addr, struct pagetable_layout_info *pgtbl_info)
+{
+	return get_index(addr, pgtbl_info->page_shift) * sizeof(unsigned long);
+}
+
+static inline
+unsigned long *pte_offset(unsigned long addr, unsigned long pte,
+		struct pagetable_layout_info	*pgtbl_info)
+{
+	return  (unsigned long *) (pte + pte_index(addr, pgtbl_info));
+}
+
+static inline
+unsigned long pte_entry(unsigned long addr, unsigned long pte,
+		struct pagetable_layout_info	*pgtbl_info)
+{
+	return *pte_offset(addr, pte, pgtbl_info);
+}
 #endif

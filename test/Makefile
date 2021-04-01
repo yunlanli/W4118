@@ -9,7 +9,7 @@ CXXFLAGS = -g -Wall $(INCLUDES)
 
 all: clean vm_inspector
 
-vm_inspector: vm_inspector.c
+vm_inspector: expose_pgtbl.h
 
 clean:
 	rm -rf *.o vm_inspector
