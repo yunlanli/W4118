@@ -325,6 +325,9 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 
 	p = pid == -1 ? current : find_task_by_vpid(pid);
 
+	if (!p)
+		return -EINVAL;
+
 	init_base(&kargs);
 
 	/* expose page aligned VA range and ignore kernel portion of va */
