@@ -321,7 +321,9 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 
 	init_base(&kargs);
 
-	addr = kargs.begin_vaddr;
+	/* expose page aligned VA range */
+	addr = kargs.begin_vaddr & PAGE_MASK;
+	kargs.end_vaddr = (kargs.end_vaddr + PAGE_SIZE - 1) & PAGE_MASK;
 
 
 	p = pid == -1 ? current : find_task_by_vpid(pid);
@@ -349,8 +351,7 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 		if ((err = pgd_walk(addr, end, mm, vma, &kargs, &lst)))
 			return err;
 
-		/* ARE YOU SURE vma-> end is the start of the NEXT vma */
-	} while (addr = vma->vm_end, addr <= kargs.end_vaddr);
+	} while (addr = vma->vm_end, addr < kargs.end_vaddr);
 	
 out:
 	up_read(&mm->mmap_sem);
