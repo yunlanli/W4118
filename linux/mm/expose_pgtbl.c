@@ -259,11 +259,15 @@ static inline int pgd_walk(unsigned long addr,
 			continue;
 
 		if(src_pgd != lst->pgd){
-			args->fake_p4ds += PAGE_SIZE;
+			if (CONFIG_PGTABLE_LEVELS == 4)
+				args->fake_puds += PAGE_SIZE;
+			else
+				args->fake_p4ds += PAGE_SIZE;
+
 			lst->pgd = src_pgd;
 			
-			printk(KERN_DEBUG "-[pgd_walk] new p4d table=%lx\n", 
-					args->fake_p4ds);
+			printk(KERN_DEBUG "-[pgd_walk] new pud table=%lx\n", 
+					args->fake_puds);
 		}
 		
 		printk(KERN_DEBUG ".[pgd_walk] walking addr=%lx, next=%lx\n", 
