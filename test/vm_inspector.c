@@ -84,7 +84,7 @@ int main(int argc, char **argv)
 	if (level == 5)
 		args.fake_p4ds += PAGE_SIZE;
 
-	args.fake_puds = args.fake_p4ds + PAGE_SIZE * num_info.p4d_num;
+	args.fake_puds = args.fake_p4ds + PAGE_SIZE * (num_info.p4d_num == 0? 1:num_info.p4d_num);
 	args.fake_pmds = args.fake_puds + PAGE_SIZE * num_info.pud_num;
 	args.page_table_addr = args.fake_pmds + PAGE_SIZE * num_info.pmd_num;
 
@@ -96,8 +96,8 @@ int main(int argc, char **argv)
 		"page_table_addr: %lx\n",
 		args.fake_pgd,
 		args.fake_p4ds, 
-		args.fake_pmds, 
 		args.fake_puds, 
+		args.fake_pmds, 
 		args.page_table_addr);
 
 	/* syscalls 437 */
@@ -109,40 +109,45 @@ int main(int argc, char **argv)
 	printf("[ info ] dumping ptes...\n");
 	for (virt = va_begin; virt < va_end; virt += PAGE_SIZE)
 	{
-		if ((fake_p4d_entry =
-			*((unsigned long *)(args.fake_pgd) + get_index(virt, pgtbl_info.pgdir_shift))) == 0)
+		unsigned long p4d_base_addr = 
+			(unsigned long)(args.fake_pgd) + 8*get_index(virt, pgtbl_info.pgdir_shift);
+		if ((fake_p4d_entry = *(unsigned long *)p4d_base_addr) == 0)
 			continue;
 		
-		printf("[ info ] pgd_entry_addr=%p\n", 
-				(unsigned long *)(args.fake_pgd) + get_index(virt, pgtbl_info.pgdir_shift));
 		printf("[ info ] p4d_entry=%lx\n", fake_p4d_entry);
 		
 		if (level == 5) {
-			if ((fake_pud_entry =
-				*((unsigned long *)(args.fake_p4ds) + get_index(virt, pgtbl_info.p4d_shift))) == 0)
+			unsigned long pud_base_addr = 
+				(unsigned long)(fake_p4d_entry) + 8*get_index(virt, pgtbl_info.p4d_shift);
+			if ((fake_pud_entry = *(unsigned long *)pud_base_addr) == 0)
 				continue;
 		}
 		else
 			fake_pud_entry = fake_p4d_entry;
 		
-		printf("[ info ] pud_table_addr=%lx\n", fake_pud_entry);
-		
-		printf("[ info ] pud_table_index=%lx\n", get_index(virt, pgtbl_info.pud_shift));
 		printf("[ info ] pud_entry_addr=%lx\n", 
 				(fake_pud_entry) + 8* get_index(virt, pgtbl_info.pud_shift));
+		
+		unsigned long pmd_base_addr = 
+			(unsigned long)(fake_pud_entry) + 8*get_index(virt, pgtbl_info.pud_shift);
 			
-		if ((fake_pmd_entry = 
-			*((unsigned long *)(fake_pud_entry) + get_index(virt, pgtbl_info.pud_shift))) == 0)
+		if ((fake_pmd_entry = *(unsigned long *)pmd_base_addr) == 0)
 			continue;
+
 		printf("[ info ] pmd_table_addr=%lx\n", fake_pmd_entry);
 		
-		if ((pte_entries = 
-			*((unsigned long *)(fake_pmd_entry) + get_index(virt, pgtbl_info.pmd_shift))) == 0)
+		unsigned long pte_base_addr = 
+			(unsigned long)(fake_pmd_entry) + 8*get_index(virt, pgtbl_info.pmd_shift);
+		
+		if ((pte_entries = *(unsigned long *)pte_base_addr) == 0)
 			continue;
+		
+		unsigned long pte_entry_addr = 
+			(unsigned long)(pte_entries) + 8*get_index(virt, pgtbl_info.page_shift);
+
 		printf("[ info ] pte_entries=%lx\n", pte_entries);
 		
-		if ((pte_entry = 
-			*((unsigned long *)(pte_entries) + get_index(virt, pgtbl_info.page_shift))) == 0)
+		if ((pte_entry = *(unsigned long *)pte_entry_addr) == 0)
 		{
 			if (verbose)
 				printf("0xdead00000000 0x00000000000 0 0 0 0\n");
