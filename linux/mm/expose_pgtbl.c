@@ -100,13 +100,13 @@ static inline int pmd_walk(pud_t *src_pud,
 			if( (err = pte_copy(src_pmd, src_mm, vma, args, lst)) )
 				return err;
 			
-			usr_pmd_addr = args->fake_pmds + pmd_index(addr);
+			usr_pmd_addr = (args->fake_pmds) + pmd_index(addr)*sizeof(unsigned long);
 			
 			printk(KERN_DEBUG "----[pmd_walk] copying=%lx to %lx\n", 
 					args->page_table_addr,
 					usr_pmd_addr);
 
-			if(copy_to_user((void *) usr_pmd_addr,
+			if(copy_to_user((void *)usr_pmd_addr,
 					&args->page_table_addr,
 					sizeof(unsigned long)))
 				return -EFAULT;
@@ -167,15 +167,15 @@ static inline int pud_walk(p4d_t 		*src_p4d,
 			return err;
 		
 		/* 2. now we put the fake_pmd_addr to usr_pud_addr */
-		usr_pud_addr = args->fake_pmds + pmd_index(addr);
+		usr_pud_addr = args->fake_puds + pud_index(addr)*sizeof(unsigned long);
 		
 		printk(KERN_DEBUG "---[pud_walk] copying=%lx to %lx\n", 
 				args->fake_pmds,
 				usr_pud_addr);
 
 		if(copy_to_user((void *)usr_pud_addr, 
-					&args->fake_pmds, 
-					sizeof(unsigned long)))
+				&args->fake_pmds, 
+				sizeof(unsigned long)))
 			return -EFAULT;
 
 	}while(src_pud++, addr = next, addr != end);
@@ -221,15 +221,15 @@ static inline int p4d_walk(pgd_t		*src_pgd,
 		if( (err = pud_walk(src_p4d, addr, next, src_mm, vma, args, lst)) )
 			return err;
 
-		usr_p4d_addr = args->fake_p4ds + p4d_index(addr);
+		usr_p4d_addr = (args->fake_p4ds) + p4d_index(addr)*sizeof(unsigned long);
 		
 		printk(KERN_DEBUG ".-[p4d_walk] copying=%lx to %lx\n", 
 				args->fake_puds,
 				usr_p4d_addr);
 
 		if(copy_to_user((void *)usr_p4d_addr, 
-					&args->fake_puds, 
-					sizeof(unsigned long)))
+				&args->fake_puds, 
+				sizeof(unsigned long)))
 			return -EFAULT;
 
 	}while(src_p4d++, addr = next, addr != end);
@@ -272,18 +272,18 @@ static inline int pgd_walk(unsigned long addr,
 		if( (err = p4d_walk(src_pgd, addr, next, src_mm, vma, args, lst)) )
 			return err;
 
-		usr_pgd_addr = args->fake_pgd + pgd_index(addr);
+		usr_pgd_addr = (args->fake_pgd) + pgd_index(addr)*sizeof(unsigned long);
+
+		src_addr = CONFIG_PGTABLE_LEVELS == 4 ? 
+			args->fake_puds : args->fake_p4ds;
 		
 		printk(KERN_DEBUG "-[pgd_walk] copying=%lx to %lx\n", 
 				args->fake_p4ds,
 				usr_pgd_addr);
 
-		src_addr = CONFIG_PGTABLE_LEVELS == 4 ? 
-			args->fake_puds : args->fake_p4ds;
-
 		if(copy_to_user((void *)usr_pgd_addr, 
-					&src_addr, 
-					sizeof(unsigned long)))
+				&src_addr, 
+				sizeof(unsigned long)))
 			return -EFAULT;
 
 	}while(src_pgd++, addr = next, addr != end);
