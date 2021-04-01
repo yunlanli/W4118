@@ -51,6 +51,10 @@ int main(int argc, char **argv)
 	/* nonsense */
 	if (va_begin >= va_end)
 		return -1;
+	
+	/* page align va_begin & va_end */
+	va_begin &= PAGE_MASK;
+	va_end = (va_end + PAGE_SIZE - 1) & PAGE_MASK;
 
 	args.begin_vaddr = va_begin;
 	args.end_vaddr = va_end;
@@ -83,7 +87,7 @@ int main(int argc, char **argv)
 		return ret;
 
 	/* dump PTEs */
-	for (virt = va_begin & PAGE_MASK; virt < va_end; virt += PAGE_SIZE)
+	for (virt = va_begin; virt < va_end; virt += PAGE_SIZE)
 	{
 		/* pgd */
 		if (!(fake_p4d = pgd_entry(virt, args.fake_pgd, &pgtbl_info)))
