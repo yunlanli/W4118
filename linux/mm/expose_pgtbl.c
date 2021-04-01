@@ -315,21 +315,28 @@ SYSCALL_DEFINE2(expose_page_table, pid_t, pid,
 	struct mm_struct *mm;
 	struct task_struct *p;
 	int err;
-	unsigned long addr, end;
+	unsigned long addr, end, kvaddr;
 
 	if (copy_from_user(&kargs, args, sizeof(kargs)))
 		return -EFAULT;
 
+	p = pid == -1 ? current : find_task_by_vpid(pid);
+
 	init_base(&kargs);
 
-	/* expose page aligned VA range */
+	/* expose page aligned VA range and ignore kernel portion of va */
 	addr = kargs.begin_vaddr & PAGE_MASK;
-	kargs.end_vaddr = (kargs.end_vaddr + PAGE_SIZE - 1) & PAGE_MASK;
+	/* start va of kernel portion page table in user program */
+	kvaddr = pgd_page_vaddr(*(p->mm->pgd + KERNEL_PGD_BOUNDARY));
+	if (kargs.end_vaddr > kvaddr)
+		kargs.end_vaddr = kvaddr;
+	else
+		kargs.end_vaddr = (kargs.end_vaddr + PAGE_SIZE - 1) & PAGE_MASK;
 
+	printk(KERN_DEBUG "?[expose_pgtbl_info] kvaddr: %lx, updated end_vaddr: %lx\n",
+			kvaddr, kargs.end_vaddr);
 
-	p = pid == -1 ? current : find_task_by_vpid(pid);
 	mm = p->mm;
-
 	down_read(&mm->mmap_sem);
 
 	do {
