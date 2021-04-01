@@ -1,66 +1,4 @@
-#include <sys/mman.h>
-#include <sys/types.h>
-
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
-
-#define __NR_get_pgtbl_layout 436
-#define __NR_expose_pgtbl_args 437
-
-/* copied from the kernel */
-#define get_index(address, shift) (((address) >> shift) & 511)
-
-
-#define PAGE_SIZE 4096
-
-struct expose_pgtbl_args {
-	unsigned long fake_pgd;
-	unsigned long fake_p4ds;
-	unsigned long fake_puds;
-	unsigned long fake_pmds;
-	unsigned long page_table_addr;
-	unsigned long begin_vaddr;
-	unsigned long end_vaddr;
-};
-struct pagetable_layout_info {
-	uint32_t pgdir_shift;
-	uint32_t p4d_shift;
-	uint32_t pud_shift;
-	uint32_t pmd_shift;
-	uint32_t page_shift;
- };
-
-int get_pagetable_layout(struct pagetable_layout_info *pgtbl_info)
-{
-	return syscall(__NR_get_pgtbl_layout, pgtbl_info);
-}
-int expose_page_table(pid_t pid, struct expose_pgtbl_args *args)
-{
-	return syscall(__NR_expose_pgtbl_args, pid, args);
-}
-static inline unsigned long get_phys_addr(unsigned long pte_entry)
-{
-	return (((1UL << 52) - 1) & pte_entry) >> 12 << 12;
-}
-static inline int young_bit(unsigned long pte_entry)
-{
-	return 1UL << 5 & pte_entry ? 1 : 0;
-}
-static inline int dirty_bit(unsigned long pte_entry)
-{
-	return 1UL << 6 & pte_entry ? 1 : 0;
-}
-static inline int write_bit(unsigned long pte_entry)
-{
-	return 1UL << 1 & pte_entry ? 1 : 0;
-}
-static inline int user_bit(unsigned long pte_entry)
-{
-	return 1UL << 2 & pte_entry ? 1 : 0;
-}
+#include "expose_pgtbl.h"
 
 int main(int argc, char **argv)
 {
@@ -71,7 +9,7 @@ int main(int argc, char **argv)
 	unsigned long va_begin, va_end;
 	pid_t pid;
 	int verbose, ret;
-	int level = 5;
+	int level;
 	void *temp_addr;
 
 	verbose = 0;
@@ -102,14 +40,14 @@ int main(int argc, char **argv)
 	args.end_vaddr = va_end;
 
 	/* syscalls 436 */
-	if ((ret = get_pagetable_layout(&pgtbl_info)) != 0)
+	if ((ret = get_pagetable_layout(&pgtbl_info)))
 			return ret;
 	printf("[ info ]  get_pagetable_layout\n");
 
-	if (pgtbl_info.pgdir_shift == pgtbl_info.p4d_shift)
-		level = 4;
+	level = get_kernel_pglevel(&pgtbl_info);
 
-	temp_addr = mmap(NULL, 6*PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
+	temp_addr = mmap(NULL, 6*PAGE_SIZE, PROT_READ | PROT_WRITE,
+			MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	
 	if (temp_addr == MAP_FAILED)
 		return -1;
