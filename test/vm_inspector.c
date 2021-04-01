@@ -113,9 +113,9 @@ int main(int argc, char **argv)
 		return -1;
 	args.fake_pgd = (unsigned long) temp_addr;
 	args.fake_p4ds = args.fake_pgd + PAGE_SIZE;
-	args.fake_pmds = args.fake_p4ds + PAGE_SIZE;
-	args.fake_puds = args.fake_pmds + PAGE_SIZE;
-	args.page_table_addr = args.fake_puds + PAGE_SIZE;
+	args.fake_puds = args.fake_p4ds + PAGE_SIZE;
+	args.fake_pmds = args.fake_puds + PAGE_SIZE;
+	args.page_table_addr = args.fake_pmds + PAGE_SIZE;
 
 
 	/* syscalls */
@@ -128,13 +128,13 @@ int main(int argc, char **argv)
 		if ((fake_p4d_entry = (&args.fake_pgd)[get_index(virt, pgtbl_info.pgdir_shift)]) == 0)
 			continue;
 
-		if ((fake_pmd_entry = (&fake_p4d_entry)[get_index(virt, pgtbl_info.p4d_shift)]) == 0)
+		if ((fake_pud_entry = (&fake_p4d_entry)[get_index(virt, pgtbl_info.p4d_shift)]) == 0)
 			continue;
 
-		if ((fake_pud_entry = (&fake_pmd_entry)[get_index(virt, pgtbl_info.pmd_shift)]) == 0)
+		if ((fake_pmd_entry = (&fake_pud_entry)[get_index(virt, pgtbl_info.pud_shift)]) == 0)
 			continue;
 
-		if ((pte_entries = (&fake_pud_entry)[get_index(virt, pgtbl_info.pud_shift)]) == 0)
+		if ((pte_entries = (&fake_pmd_entry)[get_index(virt, pgtbl_info.pmd_shift)]) == 0)
 			continue;
 
 		if ((pte_entry = (&pte_entries)[get_index(virt, pgtbl_info.page_shift)]) == 0)
