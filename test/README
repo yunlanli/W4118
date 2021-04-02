@@ -1,0 +1,53 @@
+w4118@ubuntu:~/hmw5/dev/test$ ./vm_inspector 1635 0x7feeada6c000 0x7feeada8c000
+
+[explaination]:
+Allocated heap memory, but didn't use it. Therefore, the VAs aren't backed up by
+physcial memory and in verbose mode, nothing appears.
+
+w4118@ubuntu:~/hmw5/dev/test$ ./vm_inspector 1635 0x7feeada6c000 0x7feeada8c000
+0x7feeada6c000 0x00057d1b000 1 1 1 1
+
+[explaination]:
+Write to the allocated VA, a write fault occurs. Since the VA has been recently
+accessed, written to, userspace addressable and moreover, we passed the PROT_WRITE
+falg to mmap, thus it's also writable.
+
+All bits are 1 as expected.
+
+
+w4118@ubuntu:~/hmw5/dev/test$ ./vm_inspector 1635 0x7feeada6c000 0x7feeada8c000
+0x7feeada6c000 0x00057d1b000 1 1 1 1
+0x7feeada6d000 0x00044f29000 1 0 1 1
+
+[explaination]:
+Attempt to read VA 0x7feeada6d000 which is not backed up by any physical memory.
+A read fault occurs. Thus the accessed bit is 1. As expected, the writable bit
+and user bit are set to 1.
+
+Since it's not written to, the dirty bit is 0.
+
+
+w4118@ubuntu:~/hmw5/dev/test$ ./vm_inspector 1635 0x7feeada6c000 0x7feeada8c000
+0x7feeada6c000 0x00057d1b000 1 1 1 1
+0x7feeada6d000 0x00044f29000 1 1 1 1
+
+[explaination]
+0x7feeada6d000 is written to after a read fault. Thus, the dirty bit is set to 1.
+
+
+w4118@ubuntu:~/hmw5/dev/test$ ./vm_inspector 1635 0x7feeada6c000 0x7feeada8c000
+0x7feeada6c000 0x00057d1b000 1 1 1 1
+0x7feeada6d000 0x00044f29000 1 1 1 1
+
+[explaination]
+wirte without fault, nothing changes.
+
+
+w4118@ubuntu:~/hmw5/dev/test$ ./vm_inspector 1635 0x7feeada6c000 0x7feeada8c000
+0x7feeada6c000 0x00057d1b000 1 1 1 1
+0x7feeada6d000 0x00044f29000 1 1 1 1
+
+[explaination]
+forked the process, and the mapping is now shared.
+
+w4118@ubuntu:~/hmw5/dev/test$ ./vm_inspector 1635 0x7feeada6c000 0x7feeada8c000
