@@ -16,7 +16,7 @@ void stop(void)
 void *malloc_stuff(int size, void *start, int offset)
 {
 	int *addr;
-	unsigned long VM_FLAGS = MAP_SHARED | MAP_ANONYMOUS;
+	unsigned long VM_FLAGS = MAP_PRIVATE | MAP_ANONYMOUS;
 
 	if (start)
 		VM_FLAGS |= MAP_FIXED;
@@ -93,6 +93,7 @@ int main(int argc, char **argv)
 		exit(1);
 	} else if (pid > 0) {
 		/* parent process, tmp_addr is now shared */
+		fprintf(stderr, "[ info ] child %d\n", pid);
 		fprintf(stderr, "[ info ] %p: forked, now shared.\n",
 				tmp_addr);
 
@@ -102,8 +103,12 @@ int main(int argc, char **argv)
 		*(int *) tmp_addr = 100;
 		fprintf(stderr, "[ info ] %p:copy_on_write 100\n",
 				tmp_addr);
-	}
 
+		stop();
+		fprintf(stderr, "[ info ] parent process exists\n");
+	} else {
+		sleep(300);
+	}
 
 	return 0;
 }
