@@ -35,11 +35,7 @@ static struct file_system_type ppage_fs_type = {
 
 static int __init ppagefs_init(void)
 {
-	int retval;
-
-	retval = register_filesystem(&debug_fs_type);
-	
-	return retval;
+	return register_filesystem(&ppage_fs_type);;
 }
 fs_initcall(ppagefs_init);
 
