@@ -3,11 +3,19 @@
 #include <linux/cgroup-defs.h>
 #include <linux/init.h>
 #include <linux/fs_context.h>
+#include <uapi/linux/stat.h>
 
 static int ppagefs_fill_super(struct super_block *sb, struct fs_context *fc)
 {
 	int err = 0;
-	static const struct tree_descr ppage_files[] = {{""}};
+	static const struct tree_descr ppage_files[] = {
+		{NULL},
+		{NULL},
+		{"jason", &simple_dir_operations},
+		{"yunlan", &simple_dir_operations, S_IFDIR},
+		{"dashi", &simple_dir_operations},
+		{""}
+	};
 
 	/*
 	 * @ppage_files: contains information about all directories under
