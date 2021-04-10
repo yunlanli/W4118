@@ -4,6 +4,21 @@
 #include <linux/init.h>
 #include <linux/fs_context.h>
 #include <uapi/linux/stat.h>
+#include <linux/string.h>
+#include <linux/ppage_fs.h>
+
+int count = 0;
+struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent);
+
+static struct dentry *proc_root_lookup(struct inode * dir, 
+		struct dentry * dentry, unsigned int flags)
+{
+	char name_buf[10];
+	sprintf(name_buf, "%s%d", "nieh", count++);
+
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- creating dir %s\n", __func__, name_buf);
+	return ppagefs_create_dir(name_buf, dentry);
+}
 
 static const struct inode_operations ppagefs_dir_inode_operations = {
 	.lookup		= simple_lookup,
@@ -13,10 +28,40 @@ static const struct inode_operations ppagefs_dir_inode_operations = {
 	.rename		= simple_rename,
 };
 
+static const struct inode_operations ppagefs_root_inode_operations = {
+	.lookup		= proc_root_lookup,
+};
+
+struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent)
+{
+	struct dentry *dentry; 
+	struct inode *inode;
+	
+	/* attempts to create a folder */
+	dentry = d_alloc_name(parent, name);
+	if (!dentry)
+		return NULL; // TODO: check error return values
+	inode = new_inode(parent->d_sb);
+	if (!inode) {
+		dput(dentry);
+		return NULL;
+	}
+
+	inode->i_mode = S_IFDIR | 0755;
+	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+	inode->i_op = &ppagefs_dir_inode_operations;
+	inode->i_fop = &simple_dir_operations; /* TODO: do we still need this */
+	inode->i_ino = get_next_ino();
+	/* increment directory counts */
+	inc_nlink(inode);
+	inc_nlink(d_inode(dentry->d_parent));
+	d_add(dentry, inode);
+
+	return dentry;
+}
+
 static int ppagefs_fill_super(struct super_block *sb, struct fs_context *fc)
 {
-	struct inode *inode;
-	struct dentry *dentry;
 	int err = 0;
 	static const struct tree_descr ppage_files[] = {
 		{NULL},
@@ -35,24 +80,15 @@ static int ppagefs_fill_super(struct super_block *sb, struct fs_context *fc)
 	if (err)
 		goto fail;
 
-	/* attempts to create a folder */
-	dentry = d_alloc_name(sb->s_root, "nieh");
-	if (!dentry)
-		goto fail;
-	inode = new_inode(sb);
-	if (!inode) {
-		dput(dentry);
-		goto fail;
+
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- inode_ino=%ld \n", __func__, 
+			sb->s_root->d_inode->i_ino);
+
+	sb->s_root->d_inode->i_op = &ppagefs_root_inode_operations;
+
+	if (ppagefs_create_dir("nieh", sb->s_root) == NULL) {
+		return -ENOMEM;
 	}
-	inode->i_mode = S_IFDIR | 0755;
-	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-	inode->i_op = &ppagefs_dir_inode_operations;
-	inode->i_fop = &simple_dir_operations; /* changed from i_fop */
-	inode->i_ino = 5;
-	/* increment directory counts */
-	inc_nlink(inode);
-	inc_nlink(d_inode(dentry->d_parent));
-	d_add(dentry, inode);
 fail:
 	return err;
 }
