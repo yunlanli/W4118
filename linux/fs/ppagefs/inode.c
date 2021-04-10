@@ -6,9 +6,63 @@
 #include <uapi/linux/stat.h>
 #include <linux/string.h>
 #include <linux/ppage_fs.h>
+#include <linux/uio.h>
 
 int count = 0;
 struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent);
+
+ssize_t
+ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter);
+
+int ppage_dcache_dir_open(struct inode *inode, struct file *file)
+{
+	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
+	return dcache_dir_open(inode, file);
+}
+
+int ppage_dcache_dir_close(struct inode *inode, struct file *file)
+{
+	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
+	return  dcache_dir_close(inode, file);
+}
+
+loff_t ppage_dcache_dir_lseek(struct file *file, loff_t offset, int whence)
+{
+	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
+	return dcache_dir_lseek(file, offset, whence);
+}
+
+ssize_t ppage_generic_read_dir(struct file *filp, char __user *buf, size_t siz, loff_t *ppos)
+{
+	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
+	return  generic_read_dir(filp, buf, siz, ppos);
+}
+
+int ppage_dcache_readdir(struct file *file, struct dir_context *ctx)
+{
+	char name_buf[10];
+	struct dentry *dentry;
+	
+	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
+
+	dentry = file_dentry(file);
+	
+	sprintf(name_buf, "%s%d", "nieh", count++);
+	
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- creating dir %s\n", __func__, name_buf);
+	ppagefs_create_dir(name_buf, dentry);
+
+	return dcache_readdir(file, ctx);
+}
+
+const struct file_operations ppage_dir_operations = {
+	.open		= ppage_dcache_dir_open,
+	.release	= ppage_dcache_dir_close,
+	.llseek		= ppage_dcache_dir_lseek,
+	.read		= ppage_generic_read_dir,
+	.iterate_shared	= ppage_dcache_readdir,
+	.fsync		= noop_fsync,
+};
 
 static struct dentry *proc_root_lookup(struct inode * dir, 
 		struct dentry * dentry, unsigned int flags)
@@ -31,6 +85,29 @@ static const struct inode_operations ppagefs_dir_inode_operations = {
 static const struct inode_operations ppagefs_root_inode_operations = {
 	.lookup		= proc_root_lookup,
 };
+
+const struct file_operations ppagefs_file_operations = {
+	.read_iter	= ppage_file_read_iter,
+//	.write_iter	= generic_file_write_iter,
+	.mmap		= generic_file_mmap,
+	.fsync		= noop_fsync,
+	.splice_read	= generic_file_splice_read,
+	.splice_write	= iter_file_splice_write,
+	.llseek		= generic_file_llseek,
+};
+
+ssize_t
+ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
+{
+	char *data = "50";
+	size_t bytes = strlen(data), ret;
+
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- copying %s to iter\n", __func__, data);
+	ret = _copy_to_iter(data, bytes, iter);
+	iocb->ki_pos += ret;
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- updated kiocb=%lld\n", __func__, iocb->ki_pos);
+	return ret;
+}
 
 struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent)
 {
@@ -66,9 +143,9 @@ static int ppagefs_fill_super(struct super_block *sb, struct fs_context *fc)
 	static const struct tree_descr ppage_files[] = {
 		{NULL},
 		{NULL},
-		{"jason", &simple_dir_operations, S_IRUSR | S_IWUSR},
-		{"yunlan", &simple_dir_operations, S_IRUSR | 01000},
-		{"dashi", &simple_dir_operations, 0755},
+		{"jason", &ppagefs_file_operations, S_IRUSR | S_IWUSR},
+		{"yunlan", &ppagefs_file_operations, S_IRUSR | 01000},
+		{"dashi", &ppagefs_file_operations, 0755},
 		{""}
 	};
 
@@ -85,6 +162,7 @@ static int ppagefs_fill_super(struct super_block *sb, struct fs_context *fc)
 			sb->s_root->d_inode->i_ino);
 
 	sb->s_root->d_inode->i_op = &ppagefs_root_inode_operations;
+	sb->s_root->d_inode->i_fop = &ppage_dir_operations;
 
 	if (ppagefs_create_dir("nieh", sb->s_root) == NULL) {
 		return -ENOMEM;
