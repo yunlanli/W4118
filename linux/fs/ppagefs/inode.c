@@ -17,7 +17,24 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter);
 int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 {
 	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
-	return dcache_dir_open(inode, file);
+//	return dcache_dir_open(inode, file);
+	int err = 0;
+	
+	err = dcache_dir_open(inode, file);
+	if (err)
+		return err;
+
+	/* cursor dentry allocated */
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- cursor node @file->private_data allocated.\n", __func__);
+	
+	if (!ppagefs_create_dir("nieh", file->private_data)) {
+		printk(KERN_DEBUG "[ DEBUG ] --%s-- create nieh/ failed.\n", __func__);
+		return -ENOMEM;
+	}
+
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- create nieh/ succeeded.\n", __func__);
+	
+	return 0;
 }
 
 int ppage_dcache_dir_close(struct inode *inode, struct file *file)
@@ -40,17 +57,17 @@ ssize_t ppage_generic_read_dir(struct file *filp, char __user *buf, size_t siz, 
 
 int ppage_dcache_readdir(struct file *file, struct dir_context *ctx)
 {
-	char name_buf[10];
-	struct dentry *dentry;
-	
+//	char name_buf[10];
+//	struct dentry *dentry;
+//	
 	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
-
-	dentry = file_dentry(file);
-	
-	sprintf(name_buf, "%s%d", "nieh", count++);
-	
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- creating dir %s\n", __func__, name_buf);
-	ppagefs_create_dir(name_buf, dentry);
+//
+//	dentry = file_dentry(file);
+//	
+//	sprintf(name_buf, "%s%d", "nieh", count++);
+//	
+//	printk(KERN_DEBUG "[ DEBUG ] --%s-- creating dir %s\n", __func__, name_buf);
+//	ppagefs_create_dir(name_buf, dentry);
 
 	return dcache_readdir(file, ctx);
 }
@@ -100,12 +117,25 @@ ssize_t
 ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 {
 	char *data = "50";
-	size_t bytes = strlen(data), ret;
+	size_t ret = 0, size = strlen(data) + 1;
+	loff_t fsize = strlen(data) + 1, fpos = iocb->ki_pos;
 
+	if (fpos >= fsize)
+		return ret;
+
+	/* we need to copy back some data */
+	if (fpos + iter->count > size)
+		size -= fpos;
+	else
+		size = iter->count;
+
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- fpos: %lld\n", __func__, fpos);
+	
 	printk(KERN_DEBUG "[ DEBUG ] --%s-- copying %s to iter\n", __func__, data);
-	ret = _copy_to_iter(data, bytes, iter);
+	ret = _copy_to_iter(data + fpos, size, iter);
 	iocb->ki_pos += ret;
 	printk(KERN_DEBUG "[ DEBUG ] --%s-- updated kiocb=%lld\n", __func__, iocb->ki_pos);
+
 	return ret;
 }
 
@@ -118,11 +148,14 @@ struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent)
 	dentry = d_alloc_name(parent, name);
 	if (!dentry)
 		return NULL; // TODO: check error return values
+	printk(KERN_DEBUG "[ SUCCESS ] --%s-- created dentry.\n", __func__);
+	
 	inode = new_inode(parent->d_sb);
 	if (!inode) {
 		dput(dentry);
 		return NULL;
 	}
+	printk(KERN_DEBUG "[ SUCCESS ] --%s-- created inode.\n", __func__);
 
 	inode->i_mode = S_IFDIR | 0755;
 	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
@@ -130,9 +163,15 @@ struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent)
 	inode->i_fop = &simple_dir_operations; /* TODO: do we still need this */
 	inode->i_ino = get_next_ino();
 	/* increment directory counts */
+#if 0
 	inc_nlink(inode);
 	inc_nlink(d_inode(dentry->d_parent));
+#endif
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- link dentry and inode.\n", __func__);
+	
 	d_add(dentry, inode);
+
+	printk(KERN_DEBUG "[ SUCCESS ] --%s-- link dentry and inode.\n", __func__);
 
 	return dentry;
 }
