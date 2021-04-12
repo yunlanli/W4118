@@ -8,26 +8,40 @@
 #include <linux/ppage_fs.h>
 #include <linux/uio.h>
 
-int count = 0;
 struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent);
+struct inode *ppagefs_get_inode(struct super_block *, umode_t);
 
 ssize_t
 ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter);
 
 int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 {
-	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
-//	return dcache_dir_open(inode, file);
 	int err = 0;
+	struct inode *fake_inode;
+	struct dentry *dentry;
+	
+	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
 	
 	err = dcache_dir_open(inode, file);
 	if (err)
 		return err;
-
-	/* cursor dentry allocated */
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- cursor node @file->private_data allocated.\n", __func__);
+	dentry = file->private_data;
+	printk(KERN_DEBUG "[ SUCCESS ] --%s-- cursor node @file->private_data allocated.\n", __func__);
 	
-	if (!ppagefs_create_dir("nieh", file->private_data)) {
+	fake_inode = ppagefs_get_inode(dentry->d_parent->d_sb, S_IFDIR);
+	if (!fake_inode)
+		return -ENOMEM;
+	printk(KERN_DEBUG "[ SUCCESS ] --%s-- cursor inode allocated\n", __func__);
+	fake_inode->i_private = "ppagefs_cursor";
+
+	/* increment directory counts */
+	inc_nlink(fake_inode);
+	inc_nlink(d_inode(dentry->d_parent));
+	d_add(dentry, fake_inode);
+	printk(KERN_DEBUG "[ SUCCESS ] --%s-- linked cursor inode and dentry\n", __func__);
+	
+
+	if (!ppagefs_create_dir("nieh", dentry)) {
 		printk(KERN_DEBUG "[ DEBUG ] --%s-- create nieh/ failed.\n", __func__);
 		return -ENOMEM;
 	}
@@ -57,17 +71,7 @@ ssize_t ppage_generic_read_dir(struct file *filp, char __user *buf, size_t siz, 
 
 int ppage_dcache_readdir(struct file *file, struct dir_context *ctx)
 {
-//	char name_buf[10];
-//	struct dentry *dentry;
-//	
 	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
-//
-//	dentry = file_dentry(file);
-//	
-//	sprintf(name_buf, "%s%d", "nieh", count++);
-//	
-//	printk(KERN_DEBUG "[ DEBUG ] --%s-- creating dir %s\n", __func__, name_buf);
-//	ppagefs_create_dir(name_buf, dentry);
 
 	return dcache_readdir(file, ctx);
 }
@@ -84,11 +88,9 @@ const struct file_operations ppage_dir_operations = {
 static struct dentry *proc_root_lookup(struct inode * dir, 
 		struct dentry * dentry, unsigned int flags)
 {
-	char name_buf[10];
-	sprintf(name_buf, "%s%d", "nieh", count++);
+	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
 
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- creating dir %s\n", __func__, name_buf);
-	return ppagefs_create_dir(name_buf, dentry);
+	return simple_lookup(dir, dentry, flags);
 }
 
 static const struct inode_operations ppagefs_dir_inode_operations = {
@@ -101,6 +103,11 @@ static const struct inode_operations ppagefs_dir_inode_operations = {
 
 static const struct inode_operations ppagefs_root_inode_operations = {
 	.lookup		= proc_root_lookup,
+};
+
+const struct inode_operations ppagefs_file_inode_operations = {
+	.setattr	= simple_setattr,
+	.getattr	= simple_getattr,
 };
 
 const struct file_operations ppagefs_file_operations = {
@@ -139,6 +146,36 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 	return ret;
 }
 
+struct inode *ppagefs_get_inode(struct super_block *sb, umode_t mode)
+{
+	struct inode *inode = new_inode(sb);
+
+	if (!inode) {
+		printk(KERN_DEBUG "[ SUCCESS ] --%s-- created inode.\n", __func__);
+	}
+	printk(KERN_DEBUG "[ SUCCESS ] --%s-- created inode.\n", __func__);
+
+	if (inode) {
+		inode->i_ino = get_next_ino();
+		inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+
+		switch (mode & S_IFMT) {
+			case S_IFDIR:
+				inode->i_mode	= S_IFDIR | 0755;
+				inode->i_op	= &ppagefs_dir_inode_operations;
+				inode->i_fop	= &simple_dir_operations;
+				break;
+			case S_IFREG:
+			default:
+				inode->i_op	= &ppagefs_file_inode_operations;
+				inode->i_fop	= &ppagefs_file_operations;
+				break;
+		}
+	}
+
+	return inode;
+}
+
 struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent)
 {
 	struct dentry *dentry; 
@@ -150,30 +187,32 @@ struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent)
 		return NULL; // TODO: check error return values
 	printk(KERN_DEBUG "[ SUCCESS ] --%s-- created dentry.\n", __func__);
 	
-	inode = new_inode(parent->d_sb);
-	if (!inode) {
-		dput(dentry);
+	inode = ppagefs_get_inode(parent->d_sb, S_IFDIR);
+	if (!inode)
 		return NULL;
-	}
-	printk(KERN_DEBUG "[ SUCCESS ] --%s-- created inode.\n", __func__);
 
-	inode->i_mode = S_IFDIR | 0755;
-	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-	inode->i_op = &ppagefs_dir_inode_operations;
-	inode->i_fop = &simple_dir_operations; /* TODO: do we still need this */
-	inode->i_ino = get_next_ino();
+	/* for debugging purposes */
+	inode->i_private = name;
+
 	/* increment directory counts */
-#if 0
 	inc_nlink(inode);
 	inc_nlink(d_inode(dentry->d_parent));
-#endif
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- link dentry and inode.\n", __func__);
-	
 	d_add(dentry, inode);
 
-	printk(KERN_DEBUG "[ SUCCESS ] --%s-- link dentry and inode.\n", __func__);
-
 	return dentry;
+
+#if 0
+	/*
+	 * cursor dentry is not backed by d_inode, in which case we skip the
+	 * following. Otherwise, a null dereference would incur
+	 */
+	if (parent->d_inode) {
+		/* increment directory counts */
+		inc_nlink(inode);
+		inc_nlink(d_inode(dentry->d_parent));
+		d_add(dentry, inode);
+	}
+#endif
 }
 
 static int ppagefs_fill_super(struct super_block *sb, struct fs_context *fc)
