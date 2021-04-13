@@ -589,6 +589,11 @@ static void __dentry_kill(struct dentry *dentry)
 		can_free = false;
 	}
 	spin_unlock(&dentry->d_lock);
+	
+	if (strncmp(dentry->d_name.name, "nieh_test", strlen("nieh_test")) == 0) {
+		printk(KERN_DEBUG "[ INFO ] --%s-- %s with count=%d and can_free=%d\n", 
+				__func__, dentry->d_name.name, dentry->d_lockref.count, can_free);
+	}
 	if (likely(can_free))
 		dentry_free(dentry);
 	cond_resched();
@@ -666,6 +671,11 @@ static struct dentry *dentry_kill(struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
 	struct dentry *parent = NULL;
+	
+	if (strncmp(dentry->d_name.name, "nieh_test",strlen("nieh_test")) == 0) {
+		printk(KERN_DEBUG "[ INFO ] --%s-- entered %s with count=%d\n", 
+				__func__, dentry->d_name.name, dentry->d_lockref.count);
+	}
 
 	if (inode && unlikely(!spin_trylock(&inode->i_lock)))
 		goto slow_positive;
@@ -692,6 +702,10 @@ slow_positive:
 	spin_lock(&dentry->d_lock);
 	parent = lock_parent(dentry);
 got_locks:
+	if (strncmp(dentry->d_name.name, "nieh_test", strlen("nieh_test")) == 0) {
+		printk(KERN_DEBUG "[ INFO ] --%s-- got_locks with %s with count=%d\n", 
+				__func__, dentry->d_name.name, dentry->d_lockref.count);
+	}
 	if (unlikely(dentry->d_lockref.count != 1)) {
 		dentry->d_lockref.count--;
 	} else if (likely(!retain_dentry(dentry))) {
@@ -724,6 +738,10 @@ static inline bool fast_dput(struct dentry *dentry)
 	 * If we have a d_op->d_delete() operation, we sould not
 	 * let the dentry count go to zero, so use "put_or_lock".
 	 */
+	if (strncmp(dentry->d_name.name, "nieh_test", strlen("nieh_test")) == 0) {
+		printk(KERN_DEBUG "[ INFO ] --%s-- entered %s with count=%d\n", 
+				__func__, dentry->d_name.name, dentry->d_lockref.count);
+	}
 	if (unlikely(dentry->d_flags & DCACHE_OP_DELETE))
 		return lockref_put_or_lock(&dentry->d_lockref);
 
@@ -738,12 +756,20 @@ static inline bool fast_dput(struct dentry *dentry)
 	 * by somebody else, the fast path has failed. We will need to
 	 * get the lock, and then check the count again.
 	 */
+	if (strncmp(dentry->d_name.name, "nieh_test", strlen("nieh_test")) == 0) {
+		printk(KERN_DEBUG "[ INFO ] --%s-- after lockref_put_return %s with count=%d\n", 
+				__func__, dentry->d_name.name, dentry->d_lockref.count);
+	}
 	if (unlikely(ret < 0)) {
 		spin_lock(&dentry->d_lock);
 		if (dentry->d_lockref.count > 1) {
 			dentry->d_lockref.count--;
 			spin_unlock(&dentry->d_lock);
 			return true;
+		}
+		if (strncmp(dentry->d_name.name, "nieh_test", strlen("nieh_test")) == 0) {
+			printk(KERN_DEBUG "[ INFO ] --%s-- ret<0 %s with count=%d\n", 
+					__func__, dentry->d_name.name, dentry->d_lockref.count);
 		}
 		return false;
 	}
@@ -841,6 +867,11 @@ void dput(struct dentry *dentry)
 {
 	while (dentry) {
 		might_sleep();
+		
+		if (strncmp(dentry->d_name.name, "nieh_test", strlen("nieh_test")) == 0) {
+			printk(KERN_DEBUG "[ INFO ] --%s-- fast_dput %s with count=%d\n", 
+					__func__, dentry->d_name.name, dentry->d_lockref.count);
+		}
 
 		rcu_read_lock();
 		if (likely(fast_dput(dentry))) {
@@ -850,12 +881,20 @@ void dput(struct dentry *dentry)
 
 		/* Slow case: now with the dentry lock held */
 		rcu_read_unlock();
+		if (strncmp(dentry->d_name.name, "nieh_test", strlen("nieh_test")) == 0) {
+			printk(KERN_DEBUG "[ INFO ] --%s-- entered %s with count=%d\n", 
+					__func__, dentry->d_name.name, dentry->d_lockref.count);
+		}
 
 		if (likely(retain_dentry(dentry))) {
 			spin_unlock(&dentry->d_lock);
 			return;
 		}
-
+		if (strncmp(dentry->d_name.name, "nieh_test", strlen("nieh_test")) == 0) {
+			printk(KERN_DEBUG "[ INFO ] --%s-- before dentry_kill; entered %s with count=%d\n", 
+					__func__, dentry->d_name.name, dentry->d_lockref.count);
+		}
+		
 		dentry = dentry_kill(dentry);
 	}
 }
