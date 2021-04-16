@@ -7,46 +7,44 @@
 #include <linux/string.h>
 #include <linux/ppage_fs.h>
 #include <linux/uio.h>
+#include <linux/kernel.h>
 
 struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent);
 struct inode *ppagefs_get_inode(struct super_block *, umode_t);
+const struct dentry_operations ppage_dentry_operations;
 
 ssize_t
 ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter);
 
 int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 {
-	int err = 0;
-	struct inode *fake_inode;
-	struct dentry *dentry;
+	int err = 0, ret;
+	struct dentry *dentry, *subdir;
+	char buf[10];
+	pid_t pid;
 	
 	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
 	
 	err = dcache_dir_open(inode, file);
 	if (err)
 		return err;
-	dentry = file->private_data;
 	printk(KERN_DEBUG "[ SUCCESS ] --%s-- cursor node @file->private_data allocated.\n", __func__);
 	
-	fake_inode = ppagefs_get_inode(dentry->d_parent->d_sb, S_IFDIR);
-	if (!fake_inode)
-		return -ENOMEM;
-	printk(KERN_DEBUG "[ SUCCESS ] --%s-- cursor inode allocated\n", __func__);
-	fake_inode->i_private = "ppagefs_cursor";
+	dentry = file->f_path.dentry;
 
-	/* increment directory counts */
-	inc_nlink(fake_inode);
-	inc_nlink(d_inode(dentry->d_parent));
-	d_add(dentry, fake_inode);
-	printk(KERN_DEBUG "[ SUCCESS ] --%s-- linked cursor inode and dentry\n", __func__);
+	pid = task_pid_vnr(current);
+	printk(KERN_DEBUG "[ INFO ] --%s-- current->comm: %s\n", __func__, current->comm);
 	
-
-	if (!ppagefs_create_dir("nieh", dentry)) {
-		printk(KERN_DEBUG "[ DEBUG ] --%s-- create nieh/ failed.\n", __func__);
+	snprintf(buf, sizeof(buf), "%d", pid);
+	subdir = ppagefs_create_dir(buf, dentry);
+	if (!subdir) {
+		printk(KERN_DEBUG "[ DEBUG ] --%s-- create %s/ failed.\n", __func__, buf);
 		return -ENOMEM;
 	}
+	subdir->d_flags |= DCACHE_OP_DELETE;
+	subdir->d_op = &ppage_dentry_operations;
 
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- create nieh/ succeeded.\n", __func__);
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- create %s/ succeeded.\n", __func__, buf);
 	
 	return 0;
 }
@@ -76,6 +74,20 @@ int ppage_dcache_readdir(struct file *file, struct dir_context *ctx)
 	return dcache_readdir(file, ctx);
 }
 
+int ppage_delete(const struct dentry *dentry)
+{
+	printk(KERN_DEBUG "[ INFO ] --%s-- d_lockref.count: %d\n", __func__, dentry->d_lockref.count);
+	return 1;
+}
+
+struct dentry *ppage_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
+{
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- @dentry: %s\n",
+			__func__, dentry->d_name.name);
+
+	return simple_lookup(dir, dentry, flags);
+}
+
 const struct file_operations ppage_dir_operations = {
 	.open		= ppage_dcache_dir_open,
 	.release	= ppage_dcache_dir_close,
@@ -88,13 +100,14 @@ const struct file_operations ppage_dir_operations = {
 static struct dentry *proc_root_lookup(struct inode * dir, 
 		struct dentry * dentry, unsigned int flags)
 {
-	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- @dentry: %s\n",
+			__func__, dentry->d_name.name);
 
 	return simple_lookup(dir, dentry, flags);
 }
 
 static const struct inode_operations ppagefs_dir_inode_operations = {
-	.lookup		= simple_lookup,
+	.lookup		= ppage_lookup,
 	.link		= simple_link,
 	.unlink		= simple_unlink,
 	.rmdir		= simple_rmdir,
@@ -112,12 +125,15 @@ const struct inode_operations ppagefs_file_inode_operations = {
 
 const struct file_operations ppagefs_file_operations = {
 	.read_iter	= ppage_file_read_iter,
-//	.write_iter	= generic_file_write_iter,
 	.mmap		= generic_file_mmap,
 	.fsync		= noop_fsync,
 	.splice_read	= generic_file_splice_read,
 	.splice_write	= iter_file_splice_write,
 	.llseek		= generic_file_llseek,
+};
+
+const struct dentry_operations ppage_dentry_operations = {
+	.d_delete	= ppage_delete,
 };
 
 ssize_t
@@ -242,7 +258,7 @@ static int ppagefs_fill_super(struct super_block *sb, struct fs_context *fc)
 	sb->s_root->d_inode->i_op = &ppagefs_root_inode_operations;
 	sb->s_root->d_inode->i_fop = &ppage_dir_operations;
 
-	if (ppagefs_create_dir("nieh", sb->s_root) == NULL) {
+	if (ppagefs_create_dir("kent", sb->s_root) == NULL) {
 		return -ENOMEM;
 	}
 fail:
