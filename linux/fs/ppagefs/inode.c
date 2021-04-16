@@ -124,7 +124,8 @@ struct expose_count_args{
 	int total;
 	int zero;
 };
-static inline int pmd_walk(pud_t *src_pud,
+
+static inline int pte_walk(pmd_t *src_pmd,
 	unsigned long addr,
 	unsigned long end,
 	struct mm_struct *src_mm,
@@ -134,6 +135,34 @@ static inline int pmd_walk(pud_t *src_pud,
 {
 	return 0;
 }
+
+static inline int pmd_walk(pud_t *src_pud,
+	unsigned long addr,
+	unsigned long end,
+	struct mm_struct *src_mm,
+	struct vm_area_struct *vma,
+	struct expose_count_args *args,
+	struct va_info *lst)
+{
+
+	int err;
+	unsigned long next;
+	pmd_t *src_pmd = pmd_offset(src_pud, addr);
+	do {
+		next = pmd_addr_end(addr, end);
+
+		if (pmd_none_or_clear_bad(src_pmd))
+			continue;
+
+		err = pte_walk(src_pmd, addr, next, src_mm, vma, args, lst);
+		if (err < 0)
+			return err;
+
+	} while (src_pmd++, addr = next, addr != end);
+
+	return 0;
+}
+
 static inline int pud_walk(p4d_t *src_p4d,
 	unsigned long addr,
 	unsigned long end,
