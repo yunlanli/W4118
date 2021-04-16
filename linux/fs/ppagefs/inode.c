@@ -125,25 +125,50 @@ struct expose_count_args{
 	int zero;
 };
 
-static inline int count_page(pte_t *pte)
+void pfn_rb_insert(struct rb_root *root, struct pfn_node *new, struct expose_count_args *args)
+{
+	struct rb_node **node = &root->rb_node, *parent;
+	unsigned long existing_pfn = new->pfn;
+	struct pfn_node *tmp;
+
+	parent = *node;
+
+	/* Go to the bottom of the tree */
+	while (*node) {
+		parent = *node;
+		tmp = rb_entry(parent, struct pfn_node, node);
+
+		if (tmp->pfn == existing_pfn)
+			return; /* duplicate */
+
+		if (tmp->pfn > existing_pfn)
+			node = &parent->rb_left;
+		else
+			node = &parent->rb_right;
+	}
+
+	/* Put the new node there */
+	rb_link_node(&new->node, parent, node);
+	rb_insert_color(&new->node, root);
+
+	if (is_zero_pfn(existing_pfn))
+		args->zero++;
+	args->total++;
+}
+
+static inline int count_page(pte_t *pte, struct expose_count_args *args)
 {
 	// int ret;
- //    	struct pfn_node *new;
- //   	struct page *page = get_page_from_pfn(pfn);
- //    	new->pfn = pte_pfn(*pte);
-    
- //    	/* checked before already */
-    
-	// down_read(&src_mm->mmap_sem);
-    
-	// pfn_rb_insert
-    
-	// up_read(&src_mm->mmap_sem);
+    	struct pfn_node *new;
+   	// struct page *page;
+   	struct rb_root *root;
+
+
+    	new->pfn = pte_pfn(*pte);
+    	pfn_rb_insert(root, new, args);
 
 	return 0;
 }
-
-
 
 static inline int pte_walk(pmd_t *src_pmd,
 	unsigned long addr,
@@ -153,14 +178,14 @@ static inline int pte_walk(pmd_t *src_pmd,
 	struct expose_count_args *args,
 	struct va_info *lst)
 {
-	int err;
-	unsigned long next;
-	unsigned long pfn;
-	struct page *page;
+	// int err;
+	// unsigned long next;
+	// unsigned long pfn;
+	// struct page *page;
 
 	pte_t *pte = pte_offset_map(src_pmd, addr);
 	for (;;) {
-		count_page(pte);
+		count_page(pte, args);
 
 		addr += PAGE_SIZE;
 		if (addr == end)
