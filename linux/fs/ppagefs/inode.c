@@ -396,7 +396,10 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 	rcu_read_lock();
 
 	for_each_process(p) {
+		get_task_struct(p);
 		pid_dir = ppagefs_pid_dir(p, dentry);
+		put_task_struct(p);
+
 		if (!pid_dir) {
 			printk(KERN_DEBUG "[ DEBUG ] --%s-- "
 					  "create %d/ failed.\n",
@@ -446,30 +449,43 @@ struct dentry *ppage_lookup(struct inode *dir, struct dentry *dentry, unsigned i
 static struct dentry *ppage_root_lookup(struct inode * dir, 
 		struct dentry * dentry, unsigned int flags)
 {
-	struct dentry *ret_dentry;
+	struct dentry *pid_dir;
+	struct task_struct *p;
+	const char *dirname = dentry->d_name.name;
+	long pid = -1;
+	char comm[TASK_COMM_LEN] = "", p_comm[TASK_COMM_LEN];
 
-	/*
-	 * temporary, skips re-creation of "nieh_test" folders
-	 */
-	if (strncmp(dentry->d_name.name, "nieh_test",
-				strlen("nieh_test")) == 0)
-		return NULL;
+	sscanf(dirname, "%ld.%s", &pid, comm);
+	if (pid == -1 || !(*comm))
+		goto dir_not_found;
 
-	ret_dentry = ppagefs_create_dir(dentry->d_name.name,
-			dentry->d_sb->s_root);
-	if (!ret_dentry) {
-		printk(KERN_DEBUG "[ DEBUG ] --%s-- create %s/ failed.\n",
-				__func__, dentry->d_name.name);
-		return NULL;
+	rcu_read_lock();
+	p = find_task_by_vpid((pid_t) pid);
+	rcu_read_unlock();
+
+	if (!p)
+		goto dir_not_found;
+
+	/* process found, check if process name matches */
+	get_task_struct(p);
+	strncpy(p_comm, p->comm, sizeof(p_comm));
+	strreplace(p_comm, '/', '-');
+
+	if (strncmp(comm, p_comm, strlen(comm) + 1)) {
+		put_task_struct(p);
+		goto dir_not_found;
 	}
-	printk(KERN_DEBUG "[ SUCCESS ] --%s-- created %s/.\n",
-			__func__, ret_dentry->d_name.name);
 
-	ret_dentry->d_flags |= DCACHE_OP_DELETE;
-	ret_dentry->d_lockref.count = 0;
-	ret_dentry->d_op = &ppage_dentry_operations;
+	/* process exists and process name matches */
+	pid_dir = ppagefs_pid_dir(p,
+			dentry->d_sb->s_root);
+	put_task_struct(p);
 
-	return ret_dentry;
+	return pid_dir;
+
+dir_not_found:
+	printk(KERN_DEBUG "[ FAILURE ] --%s-- No such directory\n", __func__);
+	return NULL;
 }
 
 int ppage_fake_dir_open(struct inode *inode, struct file *file)
