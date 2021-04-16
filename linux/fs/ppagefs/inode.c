@@ -111,8 +111,43 @@ static struct file_system_type ppage_fs_type = {
 	.kill_sb =	kill_litter_super,
 };
 
+struct pfn_node {
+	struct rb_node node;
+	unsigned long pfn;
+};
+
+struct va_info {
+	pte_t last_pte;
+};
+
+struct expose_count_args{
+	int total;
+	int zero;
+};
+
 ssize_t
 ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter);
+static inline int pgd_walk(
+	struct mm_struct *src_mm,
+	struct vm_area_struct *vma,
+	struct expose_count_args *args,
+	struct va_info *lst)
+{
+	return 0;
+}
+
+static inline int mmap_walk(struct mm_struct *srcmm, struct expose_count_args *args,
+	struct va_info *lst)
+{
+	struct vm_area_struct *mpnt;
+	int ret;
+	for (mpnt = srcmm->mmap; mpnt; mpnt = mpnt->vm_next) {
+		ret = pgd_walk(srcmm, mpnt, args, lst);
+		if (ret < 0)
+			return ret;
+	}
+	return 0;
+}
 
 int ppage_simple_unlink(struct inode *dir, struct dentry *dentry)
 {
