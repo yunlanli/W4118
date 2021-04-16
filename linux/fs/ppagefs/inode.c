@@ -8,6 +8,7 @@
 #include <linux/ppage_fs.h>
 #include <linux/uio.h>
 #include <linux/kernel.h>
+#include <linux/sched/signal.h>
 
 struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent);
 struct inode *ppagefs_get_inode(struct super_block *, umode_t);
@@ -16,36 +17,70 @@ const struct dentry_operations ppage_dentry_operations;
 ssize_t
 ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter);
 
+struct dentry *ppagefs_pid_dir(struct task_struct *p, struct dentry *parent)
+{
+	char buf[30];
+	pid_t pid;
+	struct dentry *dir;
+
+	pid = task_pid_vnr(p);
+	printk(KERN_DEBUG "[ INFO ] --%s-- current->comm: %s\n",
+			__func__, p->comm);
+	
+	/* construct directory name and escape '/' */
+	snprintf(buf, sizeof(buf), "%d.%s", pid, p->comm);
+	strreplace(buf, '/', '-');
+
+	dir = ppagefs_create_dir(buf, parent);
+	if (!dir) {
+		printk(KERN_DEBUG "[ DEBUG ] --%s-- create %s/ failed.\n",
+				__func__, buf);
+		return NULL;
+	}
+	dir->d_flags |= DCACHE_OP_DELETE;
+	dir->d_op = &ppage_dentry_operations;
+	dir->d_lockref.count = 0;
+
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- create %s/ succeeded.\n",
+			__func__, buf);
+
+	return dir;
+}
+
 int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 {
 	int err = 0, ret;
-	struct dentry *dentry, *subdir;
-	char buf[10];
-	pid_t pid;
+	struct dentry *dentry, *pid_dir;
+	struct task_struct *p;
 	
 	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
 	
 	err = dcache_dir_open(inode, file);
 	if (err)
 		return err;
-	printk(KERN_DEBUG "[ SUCCESS ] --%s-- cursor node @file->private_data allocated.\n", __func__);
+	printk(KERN_DEBUG "[ SUCCESS ] --%s-- cursor node"
+			  "@file->private_data allocated.\n", __func__);
 	
 	dentry = file->f_path.dentry;
 
-	pid = task_pid_vnr(current);
-	printk(KERN_DEBUG "[ INFO ] --%s-- current->comm: %s\n", __func__, current->comm);
-	
-	snprintf(buf, sizeof(buf), "%d", pid);
-	subdir = ppagefs_create_dir(buf, dentry);
-	if (!subdir) {
-		printk(KERN_DEBUG "[ DEBUG ] --%s-- create %s/ failed.\n", __func__, buf);
-		return -ENOMEM;
-	}
-	subdir->d_flags |= DCACHE_OP_DELETE;
-	subdir->d_op = &ppage_dentry_operations;
-	subdir->d_lockref.count = 0;
+	/*
+	 * Create a PID.PROCESSNAME directory for each
+	 * currently running process
+	 */
+	rcu_read_lock();
 
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- create %s/ succeeded.\n", __func__, buf);
+	for_each_process(p) {
+		pid_dir = ppagefs_pid_dir(p, dentry);
+		if (!pid_dir) {
+			printk(KERN_DEBUG "[ DEBUG ] --%s-- "
+					  "create %d/ failed.\n",
+					__func__, task_pid_vnr(p));
+			return -ENOMEM;
+		}
+	}
+
+	rcu_read_unlock();
+
 	
 	return 0;
 }
