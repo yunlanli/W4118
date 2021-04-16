@@ -137,7 +137,7 @@ struct expose_count_args{
 void pfn_rb_insert(struct rb_root *root, struct pfn_node *new, struct expose_count_args *args)
 {
 	struct rb_node **node = &root->rb_node, *parent;
-	unsigned long existing_pfn = new->pfn;
+	unsigned long target_pfn = new->pfn;
 	struct pfn_node *tmp;
 
 	parent = *node;
@@ -147,10 +147,10 @@ void pfn_rb_insert(struct rb_root *root, struct pfn_node *new, struct expose_cou
 		parent = *node;
 		tmp = rb_entry(parent, struct pfn_node, node);
 
-		if (tmp->pfn == existing_pfn)
+		if (tmp->pfn == target_pfn)
 			return; /* duplicate */
 
-		if (tmp->pfn > existing_pfn)
+		if (tmp->pfn > target_pfn)
 			node = &parent->rb_left;
 		else
 			node = &parent->rb_right;
@@ -160,7 +160,7 @@ void pfn_rb_insert(struct rb_root *root, struct pfn_node *new, struct expose_cou
 	rb_link_node(&new->node, parent, node);
 	rb_insert_color(&new->node, root);
 
-	if (is_zero_pfn(existing_pfn))
+	if (is_zero_pfn(target_pfn))
 		args->zero++;
 	args->total++;
 }
@@ -197,7 +197,7 @@ static inline int pte_walk(pmd_t *src_pmd,
 		count_page(pte, args);
 
 		addr += PAGE_SIZE;
-		if (addr == end)
+		if (addr >= end)
 			break;
 		pte++;
 	}
@@ -521,7 +521,7 @@ static struct dentry *ppage_fake_lookup(struct inode * dir,
 	printk(KERN_DEBUG "[ DEBUG ] --%s-- looking up %s\n", __func__, dirname);
 	
 	if (len_d == len_t && strncmp(dirname, total, len_t) == 0) {
-		if (!(ret_dentry = ppage_create_file(dentry, &ppage_files[0]))) {
+		if (!(ret_dentry = ppage_create_file(dentry->d_parent, &ppage_files[0]))) {
 			printk(KERN_DEBUG "[ DEBUG ] --%s-- create files failed.\n", __func__);
 			return NULL;
 		}
@@ -532,7 +532,7 @@ static struct dentry *ppage_fake_lookup(struct inode * dir,
 
 
 	if (len_d == len_z && strncmp(dirname, zero, len_d) == 0) {
-		if (!(ret_dentry = ppage_create_file(dentry, &ppage_files[1]))) {
+		if (!(ret_dentry = ppage_create_file(dentry->d_parent, &ppage_files[1]))) {
 			printk(KERN_DEBUG "[ DEBUG ] --%s-- create files failed.\n", __func__);
 			return NULL;
 		}
@@ -617,7 +617,6 @@ struct inode *ppage_get_inode(struct super_block *sb, umode_t mode)
 				inode->i_fop	= &simple_dir_operations;
 				break;
 			case S_IFREG:
-				printk(KERN_DEBUG "[ DEBUG ] --%s-- is_file", __func__);
 				inode->i_mode	= S_IFREG | 0644;
 				inode->i_op	= &ppagefs_file_inode_operations;
 				inode->i_fop 	= &ppagefs_file_operations;
@@ -639,21 +638,27 @@ struct dentry *ppage_create_file(struct dentry *parent, const struct tree_descr 
 {
 	struct dentry *dentry; 
 	struct inode *inode;
+	
+	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
 
-	printk(KERN_DEBUG "[ SUCCESS ] --%s-- \n", __func__);
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- parent_is=%s, file is=%s\n", 
+			__func__, parent->d_name.name, file->name);
 	
 	/* attempts to create a folder */
 	dentry = d_alloc_name(parent, file->name);
 	if (!dentry)
 		return NULL; // TODO: check error return values
 	
-	printk(KERN_DEBUG "[ SUCCESS ] --%s-- created dentry.\n", __func__);
 	
 	inode = ppage_get_inode(parent->d_sb, S_IFREG);
 	if (!inode)
 		return NULL;
 
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- linking.\n", __func__);
+
 	d_add(dentry, inode);
+
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- done linking.\n", __func__);
 
 	/*
 	dentry->d_flags |= DCACHE_OP_DELETE;
