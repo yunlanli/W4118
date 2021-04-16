@@ -346,10 +346,13 @@ int ppage_simple_unlink(struct inode *dir, struct dentry *dentry)
 
 int ppage_delete(const struct dentry * dentry)
 {
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- ref_count=%d with flag=%x\n", __func__, 
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- dentry=%s ref_count=%d with flag=%x\n", 
+			__func__, 
+			dentry->d_name.name,
 			dentry->d_lockref.count,
 			dentry->d_flags);
-	return 1;
+
+	return dentry->d_lockref.count == 0 ? 1 : 0;
 }
 
 struct dentry *ppagefs_pid_dir(struct task_struct *p, struct dentry *parent)
@@ -428,7 +431,12 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 
 int ppage_dcache_dir_close(struct inode *inode, struct file *file)
 {
-	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
+	struct dentry *dentry = file_dentry(file); 
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- %s with count=%d", 
+			__func__, dentry->d_name.name, dentry->d_lockref.count);
+	
+	// only minus 1 if multiple are holding this. For example, when doing cat
+	dentry->d_lockref.count--;
 	return  dcache_dir_close(inode, file);
 }
 
@@ -574,9 +582,13 @@ int ppage_fake_dir_open(struct inode *inode, struct file *file)
 ssize_t
 ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 {
+	struct dentry *dentry = file_dentry(iocb->ki_filp);
 	char *data = "50";
 	size_t ret = 0, size = strlen(data) + 1;
 	loff_t fsize = strlen(data) + 1, fpos = iocb->ki_pos;
+	
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- pre-read %s with count=%d", 
+			__func__, dentry->d_name.name, dentry->d_lockref.count);
 
 	if (fpos >= fsize)
 		return ret;
@@ -593,6 +605,10 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 	ret = _copy_to_iter(data + fpos, size, iter);
 	iocb->ki_pos += ret;
 	printk(KERN_DEBUG "[ DEBUG ] --%s-- updated kiocb=%lld\n", __func__, iocb->ki_pos);
+
+	dentry->d_lockref.count--;
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- post-read %s with count=%d", 
+			__func__, dentry->d_name.name, dentry->d_lockref.count);
 
 	return ret;
 }
@@ -649,7 +665,6 @@ struct dentry *ppage_create_file(struct dentry *parent, const struct tree_descr 
 	if (!dentry)
 		return NULL; // TODO: check error return values
 	
-	
 	inode = ppage_get_inode(parent->d_sb, S_IFREG);
 	if (!inode)
 		return NULL;
@@ -657,14 +672,12 @@ struct dentry *ppage_create_file(struct dentry *parent, const struct tree_descr 
 	printk(KERN_DEBUG "[ DEBUG ] --%s-- linking.\n", __func__);
 
 	d_add(dentry, inode);
+	
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- done linking, has %s with count=%d", 
+			__func__, dentry->d_name.name, dentry->d_lockref.count);
 
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- done linking.\n", __func__);
-
-	/*
 	dentry->d_flags |= DCACHE_OP_DELETE;
-	dentry->d_lockref.count = 0;
 	dentry->d_op = &ppagefs_d_op;
-	*/
 	
 	return dentry;
 }
@@ -675,16 +688,22 @@ struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent)
 	struct inode *inode;
 	
 	/* attempts to create a folder */
+	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
+
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- parent_is=%s, name is=%s\n", 
+			__func__, parent->d_name.name, name);
+
 	dentry = d_alloc_name(parent, name);
 	if (!dentry)
 		return NULL; // TODO: check error return values
-	printk(KERN_DEBUG "[ SUCCESS ] --%s-- created dentry.\n", __func__);
 	
 	inode = ppage_get_inode(parent->d_sb, S_IFDIR);
 	if (!inode)
 		return NULL;
-
+	
 	d_add(dentry, inode);
+
+	printk(KERN_DEBUG "[ SUCCESS ] --%s-- linked dentry and inode.\n", __func__);
 #if 0
 	/* for debugging purposes */
 	inode->i_private = name;
