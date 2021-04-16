@@ -125,6 +125,26 @@ struct expose_count_args{
 	int zero;
 };
 
+static inline int count_page(pte_t *pte)
+{
+	// int ret;
+ //    	struct pfn_node *new;
+ //   	struct page *page = get_page_from_pfn(pfn);
+ //    	new->pfn = pte_pfn(*pte);
+    
+ //    	/* checked before already */
+    
+	// down_read(&src_mm->mmap_sem);
+    
+	// pfn_rb_insert
+    
+	// up_read(&src_mm->mmap_sem);
+
+	return 0;
+}
+
+
+
 static inline int pte_walk(pmd_t *src_pmd,
 	unsigned long addr,
 	unsigned long end,
@@ -133,6 +153,21 @@ static inline int pte_walk(pmd_t *src_pmd,
 	struct expose_count_args *args,
 	struct va_info *lst)
 {
+	int err;
+	unsigned long next;
+	unsigned long pfn;
+	struct page *page;
+
+	pte_t *pte = pte_offset_map(src_pmd, addr);
+	for (;;) {
+		count_page(pte);
+
+		addr += PAGE_SIZE;
+		if (addr == end)
+			break;
+		pte++;
+	}
+
 	return 0;
 }
 
