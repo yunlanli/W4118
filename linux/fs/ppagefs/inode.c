@@ -124,15 +124,43 @@ struct expose_count_args{
 	int total;
 	int zero;
 };
+static inline int p4d_walk(pgd_t *src_pgd,
+	unsigned long addr,
+	unsigned long end,
+	struct mm_struct *src_mm,
+	struct vm_area_struct *vma,
+	struct expose_count_args *args,
+	struct va_info *lst)
+{
+	return 0;
+}
 
-ssize_t
-ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter);
 static inline int pgd_walk(
 	struct mm_struct *src_mm,
 	struct vm_area_struct *vma,
 	struct expose_count_args *args,
 	struct va_info *lst)
 {
+	int err;
+	unsigned long addr = vma->vm_start;
+	unsigned long end = vma->vm_end;
+	unsigned long next;
+
+	pgd_t *src_pgd = pgd_offset(src_mm, addr);
+
+	do {
+		next = pgd_addr_end(addr, end);
+
+		if (pgd_none_or_clear_bad(src_pgd))
+			continue;
+
+		err = p4d_walk(src_pgd, addr, next,
+		       src_mm, vma, args, lst);
+
+		if (err < 0)
+			return err;
+	} while (src_pgd++, addr = next, addr != end);
+
 	return 0;
 }
 
@@ -148,6 +176,9 @@ static inline int mmap_walk(struct mm_struct *srcmm, struct expose_count_args *a
 	}
 	return 0;
 }
+
+ssize_t
+ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter);
 
 int ppage_simple_unlink(struct inode *dir, struct dentry *dentry)
 {
