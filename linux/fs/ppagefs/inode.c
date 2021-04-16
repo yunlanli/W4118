@@ -97,13 +97,33 @@ const struct file_operations ppage_dir_operations = {
 	.fsync		= noop_fsync,
 };
 
-static struct dentry *proc_root_lookup(struct inode * dir, 
+static struct dentry *ppage_root_lookup(struct inode * dir, 
 		struct dentry * dentry, unsigned int flags)
 {
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- @dentry: %s\n",
-			__func__, dentry->d_name.name);
+	struct dentry *ret_dentry;
 
-	return simple_lookup(dir, dentry, flags);
+	/*
+	 * temporary, skips re-creation of "nieh_test" folders
+	 */
+	if (strncmp(dentry->d_name.name, "nieh_test",
+				strlen("nieh_test")) == 0)
+		return NULL;
+
+	ret_dentry = ppagefs_create_dir(dentry->d_name.name,
+			dentry->d_sb->s_root);
+	if (!ret_dentry) {
+		printk(KERN_DEBUG "[ DEBUG ] --%s-- create %s/ failed.\n",
+				__func__, dentry->d_name.name);
+		return NULL;
+	}
+	printk(KERN_DEBUG "[ SUCCESS ] --%s-- created %s/.\n",
+			__func__, ret_dentry->d_name.name);
+
+	ret_dentry->d_flags |= DCACHE_OP_DELETE;
+	ret_dentry->d_lockref.count = 0;
+	ret_dentry->d_op = &ppage_dentry_operations;
+
+	return ret_dentry;
 }
 
 static const struct inode_operations ppagefs_dir_inode_operations = {
@@ -115,7 +135,7 @@ static const struct inode_operations ppagefs_dir_inode_operations = {
 };
 
 static const struct inode_operations ppagefs_root_inode_operations = {
-	.lookup		= proc_root_lookup,
+	.lookup		= ppage_root_lookup,
 };
 
 const struct inode_operations ppagefs_file_inode_operations = {
