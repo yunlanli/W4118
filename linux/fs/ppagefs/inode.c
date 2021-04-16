@@ -124,6 +124,44 @@ struct expose_count_args{
 	int total;
 	int zero;
 };
+static inline int pmd_walk(pud_t *src_pud,
+	unsigned long addr,
+	unsigned long end,
+	struct mm_struct *src_mm,
+	struct vm_area_struct *vma,
+	struct expose_count_args *args,
+	struct va_info *lst)
+{
+	return 0;
+}
+static inline int pud_walk(p4d_t *src_p4d,
+	unsigned long addr,
+	unsigned long end,
+	struct mm_struct *src_mm,
+	struct vm_area_struct *vma,
+	struct expose_count_args *args,
+	struct va_info *lst)
+{
+	int err;
+	unsigned long next;
+	pud_t *src_pud = pud_offset(src_p4d, addr);
+	do
+	{
+		next = pud_addr_end(addr, end);
+
+		if (pud_none_or_clear_bad(src_pud))
+			continue;
+
+		err = pmd_walk(src_pud, addr, next, src_mm, vma, args, lst);
+
+		if (err < 0)
+			return err;
+
+	} while (src_pud++, addr = next, addr != end);
+
+	return 0;
+}
+
 static inline int p4d_walk(pgd_t *src_pgd,
 	unsigned long addr,
 	unsigned long end,
@@ -132,6 +170,27 @@ static inline int p4d_walk(pgd_t *src_pgd,
 	struct expose_count_args *args,
 	struct va_info *lst)
 {
+	int err;
+	p4d_t *src_p4d = p4d_offset(src_pgd, addr);
+	unsigned long next;
+
+	if (CONFIG_PGTABLE_LEVELS == 4)
+		return pud_walk((p4d_t *)src_pgd, addr, end,
+			src_mm, vma, args, lst);
+
+	do {
+		next = p4d_addr_end(addr, end);
+
+		if (p4d_none_or_clear_bad(src_p4d))
+			continue;
+
+		err = pud_walk(src_p4d, addr, next,
+			src_mm, vma, args, lst);
+		if (err < 0)
+			return err;
+
+	} while (src_p4d++, addr = next, addr != end);
+
 	return 0;
 }
 
