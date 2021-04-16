@@ -8,6 +8,7 @@
 #include <linux/ppage_fs.h>
 #include <linux/uio.h>
 #include <linux/kernel.h>
+#include <linux/sched/signal.h>
 
 
 struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent);
@@ -39,66 +40,71 @@ static const struct dentry_operations ppagefs_d_op = {
 	.d_delete 		= ppage_delete,
 };
 
+struct dentry *ppagefs_pid_dir(struct task_struct *p, struct dentry *parent)
+{
+	char buf[30];
+	pid_t pid;
+	struct dentry *dir;
+
+	pid = task_pid_vnr(p);
+	printk(KERN_DEBUG "[ INFO ] --%s-- current->comm: %s\n",
+			__func__, p->comm);
+	
+	/* construct directory name and escape '/' */
+	snprintf(buf, sizeof(buf), "%d.%s", pid, p->comm);
+	strreplace(buf, '/', '-');
+
+	dir = ppagefs_create_dir(buf, parent);
+	if (!dir) {
+		printk(KERN_DEBUG "[ DEBUG ] --%s-- create %s/ failed.\n",
+				__func__, buf);
+		return NULL;
+	}
+	dir->d_flags |= DCACHE_OP_DELETE;
+	dir->d_op = &ppage_dentry_operations;
+	dir->d_lockref.count = 0;
+
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- create %s/ succeeded.\n",
+			__func__, buf);
+
+	return dir;
+}
+
 int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 {
-	//int err = 0;
-	struct dentry *dentry = file->f_path.dentry, *ret_dentry;
-	//struct dentry *d;
-	//struct list_head *anchor = &dentry->d_subdirs;
-	char buf[20];
-	pid_t pid;
+	int err = 0;
+	struct dentry *dentry, *pid_dir;
+	struct task_struct *p;
 	
 	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
-
-	pid = task_pid_vnr(current);
-	snprintf(buf, sizeof(buf), "nieh_test%d", pid);
-
-	if (!(ret_dentry = ppagefs_create_dir(buf, dentry))) {
-		printk(KERN_DEBUG "[ DEBUG ] --%s-- create nieh_test/ failed.\n", __func__);
-		return -ENOMEM;
-	}
-
-	ret_dentry->d_flags |= DCACHE_OP_DELETE;
-	ret_dentry->d_lockref.count--;
-	ret_dentry->d_op = &ppagefs_d_op;
-
-	//dput(ret_dentry);
-#if 0
-	
-	d = list_entry(anchor->next, struct dentry, d_child);
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- writing anchor_next@(%s)\n", __func__, d->d_name.name);
-	d = list_entry(anchor->prev, struct dentry, d_child);
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- writing anchor_prev@(%s)\n", __func__, d->d_name.name);
-	
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- writing anchor->next\n", __func__);
-	//list_add_tail(&ret_dentry->d_child, anchor->next);
-	//anchor->next = &ret_dentry->d_child;
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- ref_count=%d with flag=%x\n", __func__, 
-			ret_dentry->d_lockref.count,
-			ret_dentry->d_flags);
 
 	err = dcache_dir_open(inode, file);
 	if (err)
 		return err;
-	printk(KERN_DEBUG "[ SUCCESS ] --%s-- cursor node @file->private_data allocated.\n", __func__);
+	printk(KERN_DEBUG "[ SUCCESS ] --%s-- cursor node"
+			  "@file->private_data allocated.\n", __func__);
 	
 	dentry = file->f_path.dentry;
 
-	pid = task_pid_vnr(current);
-	printk(KERN_DEBUG "[ INFO ] --%s-- current->comm: %s\n", __func__, current->comm);
-	
-	snprintf(buf, sizeof(buf), "%d", pid);
-	subdir = ppagefs_create_dir(buf, dentry);
-	if (!subdir) {
-		printk(KERN_DEBUG "[ DEBUG ] --%s-- create %s/ failed.\n", __func__, buf);
-		return -ENOMEM;
-	}
-	subdir->d_flags |= DCACHE_OP_DELETE;
-	subdir->d_op = &ppage_dentry_operations;
+	/*
+	 * Create a PID.PROCESSNAME directory for each
+	 * currently running process
+	 */
+	rcu_read_lock();
 
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- create nieh/ succeeded.\n", __func__);
-#endif	
-	return dcache_dir_open(inode, file);
+	for_each_process(p) {
+		pid_dir = ppagefs_pid_dir(p, dentry);
+		if (!pid_dir) {
+			printk(KERN_DEBUG "[ DEBUG ] --%s-- "
+					  "create %d/ failed.\n",
+					__func__, task_pid_vnr(p));
+			return -ENOMEM;
+		}
+	}
+
+	rcu_read_unlock();
+	
+	return 0;
 }
 
 int ppage_dcache_dir_close(struct inode *inode, struct file *file)
