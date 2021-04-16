@@ -10,6 +10,9 @@
 
 struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent);
 struct inode *ppagefs_get_inode(struct super_block *, umode_t);
+int ppage_fake_dir_open(struct inode *inode, struct file *file);
+struct dentry *ppagefs_create_file(struct dentry *parent, const struct tree_descr *files);
+
 
 ssize_t
 ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter);
@@ -35,10 +38,10 @@ static const struct dentry_operations ppagefs_d_op = {
 
 int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 {
-	int err = 0;
+	//int err = 0;
 	struct dentry *dentry = file->f_path.dentry, *ret_dentry;
-	struct dentry *d;
-	struct list_head *anchor = &dentry->d_subdirs;
+	//struct dentry *d;
+	//struct list_head *anchor = &dentry->d_subdirs;
 	char buf[20];
 	pid_t pid;
 	
@@ -134,17 +137,67 @@ const struct file_operations ppage_dir_operations = {
 	.fsync		= noop_fsync,
 };
 
+const struct file_operations ppage_fake_dir_operations = {
+	.open		= ppage_fake_dir_open,
+	.release	= ppage_dcache_dir_close,
+	.llseek		= ppage_dcache_dir_lseek,
+	.read		= ppage_generic_read_dir,
+	.iterate_shared	= ppage_dcache_readdir,
+	.fsync		= noop_fsync,
+};
+
+const struct inode_operations ppagefs_file_inode_operations = {
+	.setattr	= simple_setattr,
+	.getattr	= simple_getattr,
+};
+
+static struct dentry *ppagefs_inode_lookup(struct inode * dir, 
+		struct dentry * dentry, unsigned int flags)
+{
+	struct dentry *ret_dentry;
+	//char buf[20];
+
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- with dentry=%s\n", 
+			__func__, dentry->d_name.name);
+	
+	if (!(ret_dentry = ppagefs_create_dir(dentry->d_name.name, dentry->d_sb->s_root))) {
+		printk(KERN_DEBUG "[ DEBUG ] --%s-- create lookup_test/ failed.\n", __func__);
+		return NULL;
+	}
+	return ret_dentry;
+}
+
 static struct dentry *ppagefs_root_lookup(struct inode * dir, 
 		struct dentry * dentry, unsigned int flags)
 {
+	//char buf[20];
+	struct dentry *ret_dentry;
+
 	printk(KERN_DEBUG "[ DEBUG ] --%s-- with dentry=%s\n", 
 			__func__, dentry->d_name.name);
-	return NULL;
-	//return simple_lookup(dir, dentry, flags);
+
+	// temporary
+	// skips recreation of nieh_test folders
+	if (strncmp(dentry->d_name.name, "nieh_test", strlen("nieh_test")) == 0) {
+		return NULL;
+	}
+
+	if (!(ret_dentry = ppagefs_create_dir(dentry->d_name.name, dentry->d_sb->s_root))) {
+		printk(KERN_DEBUG "[ DEBUG ] --%s-- create lookup_test/ failed.\n", __func__);
+		return NULL;
+	}
+	ret_dentry->d_flags |= DCACHE_OP_DELETE;
+	ret_dentry->d_lockref.count--;
+	ret_dentry->d_op = &ppagefs_d_op;
+	ret_dentry->d_inode->i_fop = &ppage_fake_dir_operations;
+
+	return ret_dentry;
 }
 
+
+
 static const struct inode_operations ppagefs_dir_inode_operations = {
-	.lookup		= simple_lookup,
+	.lookup		= ppagefs_inode_lookup,
 	.link		= simple_link,
 	.unlink		= ppagefs_simple_unlink,
 	.rmdir		= simple_rmdir,
@@ -155,10 +208,6 @@ static const struct inode_operations ppagefs_root_inode_operations = {
 	.lookup		= ppagefs_root_lookup,
 };
 
-const struct inode_operations ppagefs_file_inode_operations = {
-	.setattr	= simple_setattr,
-	.getattr	= simple_getattr,
-};
 
 const struct file_operations ppagefs_file_operations = {
 	.read_iter	= ppage_file_read_iter,
@@ -169,6 +218,29 @@ const struct file_operations ppagefs_file_operations = {
 	.splice_write	= iter_file_splice_write,
 	.llseek		= generic_file_llseek,
 };
+
+int ppage_fake_dir_open(struct inode *inode, struct file *file)
+{
+	struct dentry *dentry = file->f_path.dentry, *ret_dentry;
+	static const struct tree_descr ppage_files[] = {
+		{NULL},
+		{NULL},
+		{"dashi", &ppagefs_file_operations, 0755},
+		{""}
+	};
+	
+	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
+
+	if (!(ret_dentry = ppagefs_create_file(dentry, &ppage_files[2]))) {
+		printk(KERN_DEBUG "[ DEBUG ] --%s-- create files failed.\n", __func__);
+		return -ENOMEM;
+	}
+
+	ret_dentry->d_flags |= DCACHE_OP_DELETE;
+	ret_dentry->d_lockref.count--;
+	ret_dentry->d_op = &ppagefs_d_op;
+	return 0;
+}
 
 ssize_t
 ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
@@ -224,6 +296,28 @@ struct inode *ppagefs_get_inode(struct super_block *sb, umode_t mode)
 	}
 
 	return inode;
+}
+struct dentry *ppagefs_create_file(struct dentry *parent, const struct tree_descr *files)
+{
+	struct dentry *dentry;
+	struct inode *inode;
+	struct super_block *s = parent->d_sb;
+
+	dentry = d_alloc_name(parent, files->name);
+
+	if (!dentry)
+		return NULL;
+	inode = new_inode(s);
+
+	if (!inode){
+		dput(dentry);
+		return NULL;
+	}
+
+	inode->i_fop = files->ops;
+	inode->i_ino = get_next_ino();
+	d_add(dentry, inode);
+	return dentry;
 }
 
 struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent)
@@ -293,11 +387,9 @@ static int ppagefs_fill_super(struct super_block *sb, struct fs_context *fc)
 
 	sb->s_root->d_inode->i_op = &ppagefs_root_inode_operations;
 	sb->s_root->d_inode->i_fop = &ppage_dir_operations;
-#if 0
 	if (ppagefs_create_dir("nieh", sb->s_root) == NULL) {
 		return -ENOMEM;
 	}
-#endif
 fail:
 	return err;
 }
