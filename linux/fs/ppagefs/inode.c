@@ -43,6 +43,7 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 	}
 	subdir->d_flags |= DCACHE_OP_DELETE;
 	subdir->d_op = &ppage_dentry_operations;
+	subdir->d_lockref.count = 0;
 
 	printk(KERN_DEBUG "[ DEBUG ] --%s-- create %s/ succeeded.\n", __func__, buf);
 	
