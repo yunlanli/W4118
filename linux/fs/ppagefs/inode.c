@@ -85,9 +85,6 @@ int ppage_piddir_delete(const struct dentry *dentry)
 	struct inode *inode = d_inode(dentry);
 	struct p_info *info = (struct p_info *) inode->i_private;
 
-	printk(KERN_DEBUG "[ DEBUG ] [%s] %s with retain=%d\n",
-			__func__, dentry->d_name.name, info->retain);
-	
 	if (info->retain)
 		return 0;
 
@@ -112,7 +109,6 @@ struct inode *ppagefs_pid_dir_inode(pid_t pid, const char *comm, struct dentry *
 	struct inode *inode;
 	struct p_info *info;
 retry:
-	printk(KERN_DEBUG "[ DEBUG ] [%s]\n", __func__);
 	/* obtains the inode with ino=pid */
 	inode = iget_locked(parent->d_sb, pid);
 	/* 
@@ -121,10 +117,7 @@ retry:
 	 */
 	info = inode->i_private;
 	if (!(inode->i_state & I_NEW) && info) {
-		printk(KERN_DEBUG "[ DEBUG ] [%s] old inode\n", __func__);
 		if (strncmp(info->comm, comm, TASK_COMM_LEN) == 0) {
-			printk(KERN_DEBUG "[ DEBUG ] [%s] same/reuse inode %d.%s\n", 
-					__func__, pid, info->comm);
 			info->retain = 1;
 			return inode;
 		}
@@ -134,7 +127,6 @@ retry:
 		info->dentry->d_op = &ppagefs_piddir_d_ops;
 		info->dentry->d_lockref.count = 1;
 		info->retain = 0;
-		printk(KERN_DEBUG "[ DEBUG ] [%s] delete and go retry\n", __func__);
 		dput(info->dentry);
 		goto retry;
 	}
@@ -154,9 +146,6 @@ retry:
 	info->dentry = NULL;
 	INIT_LIST_HEAD(&info->head);
 			
-	printk(KERN_DEBUG "[ DEBUG ] [%s] new inode initialized %d\n", 
-					__func__, info->pid);
-	
 	unlock_new_inode(inode);
 	return inode;
 }
@@ -169,8 +158,6 @@ struct dentry *ppagefs_pid_dir(struct task_struct *p, struct dentry *parent)
 	struct p_info *info;
 	struct inode *inode;
 	
-	printk(KERN_DEBUG "[ DEBUG ] [%s]\n", __func__);
-
 	pid = task_pid_vnr(p);
 	inode = ppagefs_pid_dir_inode(pid, p->comm, parent);
 	info = inode->i_private;
@@ -181,8 +168,6 @@ struct dentry *ppagefs_pid_dir(struct task_struct *p, struct dentry *parent)
 	}
 	
 	/* create new dentry and link the inode */
-	printk(KERN_DEBUG "[ DEBUG ] [%s] new_dir \n", __func__);
-	
 	/* construct directory name and escape '/' */
 	snprintf(buf, sizeof(buf), "%d.%s", pid, p->comm);
 	strreplace(buf, '/', '-');
@@ -205,7 +190,6 @@ static void inline reset_p_info(struct dentry *parent)
 {
 	struct list_head *p;
 
-	printk(KERN_DEBUG "[ DEBUG ] [%s]\n", __func__);
 	spin_lock(&parent->d_lock);
 	p = &parent->d_subdirs;
 	while((p = p->next) != &parent->d_subdirs) {
@@ -217,7 +201,6 @@ static void inline reset_p_info(struct dentry *parent)
 		info->retain = 0;
 	}
 	spin_unlock(&parent->d_lock);
-	printk(KERN_DEBUG "[ DEBUG ] [%s] done resetting \n", __func__);
 }
 
 int ppage_dcache_dir_open(struct inode *inode, struct file *file)
@@ -228,8 +211,6 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 	struct list_head *cursor, *pos, *n;
 	LIST_HEAD(d_list);
 	
-	printk(KERN_DEBUG "[ DEBUG ] [%s]\n", __func__);
-
 	err = dcache_dir_open(inode, file);
 	if (err)
 		return err;
@@ -255,7 +236,6 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 
 	rcu_read_unlock();
 
-	printk(KERN_DEBUG "[ DEBUG ] [%s] sub_dir_interation start\n", __func__);
 	/* delete PID.PROCESSNAME directories where PID is not running */
 	spin_lock(&dentry->d_lock);
 	cursor = &dentry->d_subdirs;
@@ -273,12 +253,8 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 	}
 	spin_unlock(&dentry->d_lock);
 
-	printk(KERN_DEBUG "[ DEBUG ] [%s] sub_dir_interation end\n", __func__);
-
 	list_for_each_safe(pos, n, &d_list) {
 		struct p_info *info = list_entry(pos, struct p_info, head);
-		printk(KERN_DEBUG "[ DEBUG ] [%s] deleting %s\n",
-				__func__, info->dentry->d_name.name);
 		dput(info->dentry);
 	}
 
@@ -303,7 +279,6 @@ ssize_t ppage_generic_read_dir(struct file *filp, char __user *buf,
 
 int ppage_dcache_readdir(struct file *file, struct dir_context *ctx)
 {
-	printk(KERN_DEBUG "[ DEBUG ] [%s] \n", __func__);
 	return dcache_readdir(file, ctx);
 }
 
@@ -323,7 +298,6 @@ static struct dentry *ppage_root_lookup(struct inode *dir,
 	char comm[TASK_COMM_LEN] = "", p_comm[TASK_COMM_LEN];
 	int match;
 
-	printk(KERN_DEBUG "[ DEBUG ] [%s] \n", __func__);
 	match = sscanf(dirname, "%d.%s", &pid, comm);
 	if (match != 2)
 		goto dir_not_found;
@@ -423,9 +397,6 @@ static inline struct task_struct *process_exists(struct p_info *info)
 	if (strncmp(p->comm, comm, TASK_COMM_LEN) != 0)
 		return NULL;
 	
-	printk(KERN_DEBUG "[ %s ] found prcess %d.%s\n",
-			__func__, pid, p->comm);
-
 	return p;
 }
 
@@ -442,9 +413,6 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 	loff_t fsize, fpos = iocb->ki_pos;
 	lst.root = &RB_ROOT;
 
-	printk(KERN_DEBUG "[ %s ] entered %s fpos=%lld, iter->count=%ld\n",
-			__func__, dentry->d_name.name, fpos, iter->count);
-
 	if (!(p = process_exists(p_info))) {
 		return 0;
 	}
@@ -455,12 +423,8 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 
 	if (is_zero_file(dentry)) {
 		snprintf(data, sizeof(data), "%ld\n", args.zero);
-		printk(KERN_DEBUG "[ %s ] zero_file %ld to_string=%s size=%ld", 
-				__func__, args.zero, data, strlen(data) + 1);
 	}else {
 		snprintf(data, sizeof(data), "%ld\n", args.total);
-		printk(KERN_DEBUG "[ %s ] total_file %ld to_string=%s size=%ld", 
-				__func__, args.total, data, strlen(data) + 1);
 	}
 
 	fsize = strlen(data) + 1;
@@ -478,8 +442,6 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 	ret = _copy_to_iter(data + fpos, size, iter);
 	iocb->ki_pos += ret;
 		
-	printk(KERN_DEBUG "[ %s ] copied byte=%ld\n", __func__, ret);
-	
 	// configures this dentry to be deleted after read
 	if (dentry->d_lockref.count != 0)
 		dentry->d_lockref.count = 0;
