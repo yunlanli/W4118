@@ -143,10 +143,11 @@ struct expose_count_args {
 
 /* private information for ppage_create_file */
 struct p_info {
-	pid_t		pid;
-	char		comm[TASK_COMM_LEN];
-	int		retain;
-	struct dentry 	*dentry;
+	pid_t			pid;
+	char			comm[TASK_COMM_LEN];
+	int			retain;
+	struct dentry 		*dentry;
+	struct list_head 	head;
 };
 
 static inline int is_zero_file(const struct dentry *dentry)
@@ -424,6 +425,7 @@ static inline struct p_info
 	strncpy(info->comm, comm, sizeof(info->comm));
 	info->retain = 1;
 	info->dentry = dir;
+	INIT_LIST_HEAD(&info->head);
 
 	return info;
 }
@@ -487,7 +489,8 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 	int err = 0;
 	struct dentry *dentry, *pid_dir;
 	struct task_struct *p;
-	struct list_head *cursor;
+	struct list_head *cursor, *pos, *n;
+	LIST_HEAD(d_list);
 
 	err = dcache_dir_open(inode, file);
 	if (err)
@@ -526,10 +529,19 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 		 */
 		cursor = cursor->next;
 
+		/*
+		 * add dentry to delete to d_list, and dput later
+		 * to avoid racing condition
+		 */
 		if(!info->retain)
-			dput(info->dentry);
+			list_add_tail(&info->head, &d_list);
 	}
 	spin_unlock(&dentry->d_lock);
+
+	list_for_each_safe(pos, n, &d_list) {
+		struct p_info *info = list_entry(pos, struct p_info, head);
+		dput(info->dentry);
+	}
 
 	return err;
 }
