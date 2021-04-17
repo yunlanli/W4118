@@ -488,6 +488,7 @@ static void parse_pid_dir_name(const char *dir_name, struct p_info *info)
 	char buf[20];
 	char comm[TASK_COMM_LEN];
 	pid_t pid;
+	struct task_struct *task;
 	int match;
 
 	strncpy(buf, dir_name, sizeof(buf));
@@ -499,7 +500,8 @@ static void parse_pid_dir_name(const char *dir_name, struct p_info *info)
 		goto fill_err;
 
 	info->pid = pid;
-	strncpy(info->comm, comm, TASK_COMM_LEN);
+	task = find_task_by_vpid(pid);
+	strncpy(info->comm, task->comm, TASK_COMM_LEN);
 
 	return;
 
