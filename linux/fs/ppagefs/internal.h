@@ -52,9 +52,9 @@ static struct dentry *ppagefs_create_dir(const char *name,
 
 static struct inode *ppage_get_inode(struct super_block *sb, umode_t flags);
 
-static int ppage_fake_dir_open(struct inode *inode, struct file *file);
+static int ppage_piddir_open(struct inode *inode, struct file *file);
 
-static struct dentry *ppage_fake_lookup(struct inode *dir,
+static struct dentry *ppage_piddir_lookup(struct inode *dir,
 		struct dentry *dentry, unsigned int flags);
 
 static struct dentry *ppage_create_file(struct dentry *parent,
