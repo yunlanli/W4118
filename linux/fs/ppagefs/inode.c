@@ -20,7 +20,7 @@ int ppage_fake_dir_open(struct inode *inode, struct file *file);
 static struct dentry *ppage_fake_lookup(struct inode * dir, 
 		struct dentry * dentry, unsigned int flags);
 
-struct dentry *ppage_create_file(struct dentry *parent, const struct tree_descr *files);
+struct dentry *ppage_create_file(struct dentry *parent, const struct tree_descr *files, int count);
 
 struct dentry *ppage_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags);
 
@@ -352,7 +352,8 @@ int ppage_delete(const struct dentry * dentry)
 			dentry->d_lockref.count,
 			dentry->d_flags);
 
-	return dentry->d_lockref.count == 0 ? 1 : 0;
+	// return dentry->d_lockref.count == 0 ? 1 : 0;
+	return 1;
 }
 
 struct dentry *ppagefs_pid_dir(struct task_struct *p, struct dentry *parent)
@@ -436,7 +437,6 @@ int ppage_dcache_dir_close(struct inode *inode, struct file *file)
 			__func__, dentry->d_name.name, dentry->d_lockref.count);
 	
 	// only minus 1 if multiple are holding this. For example, when doing cat
-	dentry->d_lockref.count--;
 	return  dcache_dir_close(inode, file);
 }
 
@@ -529,7 +529,7 @@ static struct dentry *ppage_fake_lookup(struct inode * dir,
 	printk(KERN_DEBUG "[ DEBUG ] --%s-- looking up %s\n", __func__, dirname);
 	
 	if (len_d == len_t && strncmp(dirname, total, len_t) == 0) {
-		if (!(ret_dentry = ppage_create_file(dentry->d_parent, &ppage_files[0]))) {
+		if (!(ret_dentry = ppage_create_file(dentry->d_parent, &ppage_files[0], 1))) {
 			printk(KERN_DEBUG "[ DEBUG ] --%s-- create files failed.\n", __func__);
 			return NULL;
 		}
@@ -540,7 +540,7 @@ static struct dentry *ppage_fake_lookup(struct inode * dir,
 
 
 	if (len_d == len_z && strncmp(dirname, zero, len_d) == 0) {
-		if (!(ret_dentry = ppage_create_file(dentry->d_parent, &ppage_files[1]))) {
+		if (!(ret_dentry = ppage_create_file(dentry->d_parent, &ppage_files[1], 1))) {
 			printk(KERN_DEBUG "[ DEBUG ] --%s-- create files failed.\n", __func__);
 			return NULL;
 		}
@@ -566,12 +566,12 @@ int ppage_fake_dir_open(struct inode *inode, struct file *file)
 	if (err)
 		return err;
 	
-	if (!(ret_dentry = ppage_create_file(dentry, &ppage_files[0]))) {
+	if (!(ret_dentry = ppage_create_file(dentry, &ppage_files[0], 0))) {
 		printk(KERN_DEBUG "[ DEBUG ] --%s-- create files failed.\n", __func__);
 		return -ENOMEM;
 	}
 	
-	if (!(ret_dentry = ppage_create_file(dentry, &ppage_files[1]))) {
+	if (!(ret_dentry = ppage_create_file(dentry, &ppage_files[1], 0))) {
 		printk(KERN_DEBUG "[ DEBUG ] --%s-- create files failed.\n", __func__);
 		return -ENOMEM;
 	}
@@ -583,7 +583,7 @@ ssize_t
 ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct dentry *dentry = file_dentry(iocb->ki_filp);
-	char *data = "50";
+	char *data = "50\n";
 	size_t ret = 0, size = strlen(data) + 1;
 	loff_t fsize = strlen(data) + 1, fpos = iocb->ki_pos;
 	
@@ -606,7 +606,10 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 	iocb->ki_pos += ret;
 	printk(KERN_DEBUG "[ DEBUG ] --%s-- updated kiocb=%lld\n", __func__, iocb->ki_pos);
 
-	dentry->d_lockref.count--;
+	// configures this dentry to be deleted after read
+	if (dentry->d_lockref.count != 0) {
+		dentry->d_lockref.count = 0;
+	}
 	printk(KERN_DEBUG "[ DEBUG ] --%s-- post-read %s with count=%d", 
 			__func__, dentry->d_name.name, dentry->d_lockref.count);
 
@@ -648,9 +651,11 @@ struct inode *ppage_get_inode(struct super_block *sb, umode_t mode)
 }
 
 /**
- * This function will create files that will be deleted on the fly
+ * This function will create files that will be:
+ * - deleted on the fly if @count=0
+ * - remains if @count=1
  */
-struct dentry *ppage_create_file(struct dentry *parent, const struct tree_descr *file)
+struct dentry *ppage_create_file(struct dentry *parent, const struct tree_descr *file, int count)
 {
 	struct dentry *dentry; 
 	struct inode *inode;
@@ -673,11 +678,12 @@ struct dentry *ppage_create_file(struct dentry *parent, const struct tree_descr 
 
 	d_add(dentry, inode);
 	
+	dentry->d_flags |= DCACHE_OP_DELETE;
+	dentry->d_lockref.count = count;
+	dentry->d_op = &ppagefs_d_op;
+	
 	printk(KERN_DEBUG "[ DEBUG ] --%s-- done linking, has %s with count=%d", 
 			__func__, dentry->d_name.name, dentry->d_lockref.count);
-
-	dentry->d_flags |= DCACHE_OP_DELETE;
-	dentry->d_op = &ppagefs_d_op;
 	
 	return dentry;
 }
