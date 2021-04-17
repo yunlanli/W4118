@@ -11,43 +11,48 @@
 #include <linux/sched/signal.h>
 
 
-struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent);
+static struct dentry
+*ppagefs_create_dir(const char *name, struct dentry *parent);
 
-struct inode *ppage_get_inode(struct super_block *, umode_t);
+static struct inode *ppage_get_inode(struct super_block *sb, umode_t flags);
 
-int ppage_fake_dir_open(struct inode *inode, struct file *file);
+static int ppage_fake_dir_open(struct inode *inode, struct file *file);
 
-static struct dentry *ppage_fake_lookup(struct inode * dir, 
-		struct dentry * dentry, unsigned int flags);
+static struct dentry *ppage_fake_lookup(struct inode *dir,
+		struct dentry *dentry, unsigned int flags);
 
-struct dentry *ppage_create_file(struct dentry *parent, const struct tree_descr *files, int count);
+static struct dentry *ppage_create_file(struct dentry *parent,
+		const struct tree_descr *files, int count);
 
-struct dentry *ppage_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags);
+static struct dentry *ppage_lookup(struct inode *dir,
+		struct dentry *dentry, unsigned int flags);
 
-int ppage_simple_unlink(struct inode *dir, struct dentry *dentry);
+static int ppage_simple_unlink(struct inode *dir, struct dentry *dentry);
 
-static struct dentry *ppage_root_lookup(struct inode * dir, 
-		struct dentry * dentry, unsigned int flags);
+static struct dentry *ppage_root_lookup(struct inode *dir,
+		struct dentry *dentry, unsigned int flags);
 
-ssize_t ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter);
+static ssize_t ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter);
 
 static void ppage_free_fc(struct fs_context *fc);
 
 static int ppage_get_tree(struct fs_context *fc);
 
-int ppage_dcache_dir_open(struct inode *inode, struct file *file);
+static int ppage_dcache_dir_open(struct inode *inode, struct file *file);
 
-int ppage_dcache_dir_close(struct inode *inode, struct file *file);
+static int ppage_dcache_dir_close(struct inode *inode, struct file *file);
 
-loff_t ppage_dcache_dir_lseek(struct file *file, loff_t offset, int whence);
+static loff_t
+ppage_dcache_dir_lseek(struct file *file, loff_t offset, int whence);
 
-ssize_t ppage_generic_read_dir(struct file *filp, char __user *buf, size_t siz, loff_t *ppos);
+static ssize_t ppage_generic_read_dir(struct file *filp, char __user *buf,
+		size_t siz, loff_t *ppos);
 
-int ppage_dcache_readdir(struct file *file, struct dir_context *ctx);
+static int ppage_dcache_readdir(struct file *file, struct dir_context *ctx);
 
-int ppage_delete(const struct dentry * dentry);
+static int ppage_delete(const struct dentry *dentry);
 
-int ppagefs_init_fs_context(struct fs_context *fc);
+static int ppagefs_init_fs_context(struct fs_context *fc);
 
 const struct dentry_operations ppage_dentry_operations = {
 	.d_delete	= ppage_delete,
@@ -111,7 +116,7 @@ const struct inode_operations ppagefs_file_inode_operations = {
 };
 
 static const struct dentry_operations ppagefs_d_op = {
-	.d_delete 		= ppage_delete,
+	.d_delete	= ppage_delete,
 };
 
 static struct file_system_type ppage_fs_type = {
@@ -129,13 +134,13 @@ struct va_info {
 	pte_t last_pte;
 };
 
-struct expose_count_args{
+struct expose_count_args {
 	int total;
 	int zero;
 };
 
 /* private information for ppage_create_file */
-struct p_info{
+struct p_info {
 	pid_t pid;
 	char comm[TASK_COMM_LEN];
 };
@@ -146,7 +151,7 @@ static inline int is_zero_file(const struct dentry *dentry)
 	const char *zero = "zero";
 	const size_t len_d = strlen(dirname);
 	const size_t len_z = strlen(zero);
-	
+
 	return (len_d == len_z && strncmp(dirname, zero, len_z) == 0);
 }
 
@@ -156,16 +161,17 @@ static inline int is_total_file(const struct dentry *dentry)
 	const char *total = "total";
 	const size_t len_d = strlen(dirname);
 	const size_t len_t = strlen(total);
-	
+
 	return (len_d == len_t && strncmp(dirname, total, len_t) == 0);
 }
 
 static inline int is_zero_or_total_file(const struct dentry *dentry)
-{	
+{
 	return is_total_file(dentry) || is_zero_file(dentry);
 }
 
-void pfn_rb_insert(struct rb_root *root, struct pfn_node *new, struct expose_count_args *args)
+void pfn_rb_insert(struct rb_root *root,
+		struct pfn_node *new, struct expose_count_args *args)
 {
 	struct rb_node **node = &root->rb_node, *parent;
 	unsigned long target_pfn = new->pfn;
@@ -198,14 +204,11 @@ void pfn_rb_insert(struct rb_root *root, struct pfn_node *new, struct expose_cou
 
 static inline int count_page(pte_t *pte, struct expose_count_args *args)
 {
-	// int ret;
-    	struct pfn_node *new;
-   	// struct page *page;
-   	struct rb_root *root;
+	struct pfn_node *new;
+	struct rb_root *root;
 
-
-    	new->pfn = pte_pfn(*pte);
-    	pfn_rb_insert(root, new, args);
+	new->pfn = pte_pfn(*pte);
+	pfn_rb_insert(root, new, args);
 
 	return 0;
 }
@@ -218,12 +221,8 @@ static inline int pte_walk(pmd_t *src_pmd,
 	struct expose_count_args *args,
 	struct va_info *lst)
 {
-	// int err;
-	// unsigned long next;
-	// unsigned long pfn;
-	// struct page *page;
-
 	pte_t *pte = pte_offset_map(src_pmd, addr);
+
 	for (;;) {
 		count_page(pte, args);
 
@@ -248,6 +247,7 @@ static inline int pmd_walk(pud_t *src_pud,
 	int err;
 	unsigned long next;
 	pmd_t *src_pmd = pmd_offset(src_pud, addr);
+
 	do {
 		next = pmd_addr_end(addr, end);
 
@@ -274,8 +274,8 @@ static inline int pud_walk(p4d_t *src_p4d,
 	int err;
 	unsigned long next;
 	pud_t *src_pud = pud_offset(src_p4d, addr);
-	do
-	{
+
+	do {
 		next = pud_addr_end(addr, end);
 
 		if (pud_none_or_clear_bad(src_pud))
@@ -352,11 +352,12 @@ static inline int pgd_walk(
 	return 0;
 }
 
-static inline int mmap_walk(struct mm_struct *srcmm, struct expose_count_args *args,
-	struct va_info *lst)
+static inline int mmap_walk(struct mm_struct *srcmm,
+		struct expose_count_args *args, struct va_info *lst)
 {
 	struct vm_area_struct *mpnt;
 	int ret;
+
 	for (mpnt = srcmm->mmap; mpnt; mpnt = mpnt->vm_next) {
 		ret = pgd_walk(srcmm, mpnt, args, lst);
 		if (ret < 0)
@@ -370,21 +371,14 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter);
 
 int ppage_simple_unlink(struct inode *dir, struct dentry *dentry)
 {
-	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
 	return  simple_unlink(dir, dentry);
-
 }
 
-int ppage_delete(const struct dentry * dentry)
+int ppage_delete(const struct dentry *dentry)
 {
 	struct inode *inode;
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- dentry=%s ref_count=%d with flag=%x\n", 
-			__func__, 
-			dentry->d_name.name,
-			dentry->d_lockref.count,
-			dentry->d_flags);
 
-	if ( is_zero_or_total_file(dentry) ) {
+	if (is_zero_or_total_file(dentry)) {
 		inode = dentry->d_inode;
 		kfree(inode->i_private);
 	}
@@ -399,31 +393,23 @@ struct dentry *ppagefs_pid_dir(struct task_struct *p, struct dentry *parent)
 	struct dentry *dir;
 
 	pid = task_pid_vnr(p);
-	printk(KERN_DEBUG "[ INFO ] --%s-- current->comm: %s\n",
-			__func__, p->comm);
-	
+
 	/* construct directory name and escape '/' */
 	snprintf(buf, sizeof(buf), "%d.%s", pid, p->comm);
 	strreplace(buf, '/', '-');
 
 	dir = ppagefs_create_dir(buf, parent);
-	if (!dir) {
-		printk(KERN_DEBUG "[ DEBUG ] --%s-- create %s/ failed.\n",
-				__func__, buf);
+	if (!dir)
 		return NULL;
-	}
 	/*
-	dir->d_flags |= DCACHE_OP_DELETE;
-	dir->d_op = &ppage_dentry_operations;
-	dir->d_lockref.count = 0;
-	*/
-	
+	 * dir->d_flags |= DCACHE_OP_DELETE;
+	 * dir->d_op = &ppage_dentry_operations;
+	 * dir->d_lockref.count = 0;
+	 */
+
 	// changes file operation such as open
 	dir->d_inode->i_fop = &ppagefs_fake_dir_operations;
 	dir->d_inode->i_op = &ppagefs_fake_dir_inode_operations;
-
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- create %s/ succeeded.\n",
-			__func__, buf);
 
 	return dir;
 }
@@ -433,15 +419,11 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 	struct dentry *dentry, *pid_dir;
 	struct task_struct *p;
 	int i = 0; //tmp
-	
-	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
 
 	err = dcache_dir_open(inode, file);
 	if (err)
 		return err;
-	printk(KERN_DEBUG "[ SUCCESS ] --%s-- cursor node"
-			  "@file->private_data allocated.\n", __func__);
-	
+
 	dentry = file->f_path.dentry;
 
 	/*
@@ -455,71 +437,59 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 		pid_dir = ppagefs_pid_dir(p, dentry);
 		put_task_struct(p);
 
-		if (!pid_dir) {
-			printk(KERN_DEBUG "[ DEBUG ] --%s-- "
-					  "create %d/ failed.\n",
-					__func__, task_pid_vnr(p));
+		if (!pid_dir)
 			return -ENOMEM;
-		}
 
-		if (i++ == 2) {
+		if (i++ == 2)
 			break;
-		}
 	}
 
 	rcu_read_unlock();
-	
+
 	return err;
 }
 
 int ppage_dcache_dir_close(struct inode *inode, struct file *file)
 {
-	struct dentry *dentry = file_dentry(file); 
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- %s with count=%d", 
-			__func__, dentry->d_name.name, dentry->d_lockref.count);
-	
-	// only minus 1 if multiple are holding this. For example, when doing cat
+	struct dentry *dentry = file_dentry(file);
+
+	/*
+	 * only minus 1 if multiple are holding this.
+	 * For example, when doing cat
+	 */
 	return  dcache_dir_close(inode, file);
 }
 
 loff_t ppage_dcache_dir_lseek(struct file *file, loff_t offset, int whence)
 {
-	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
 	return dcache_dir_lseek(file, offset, whence);
 }
 
-ssize_t ppage_generic_read_dir(struct file *filp, char __user *buf, size_t siz, loff_t *ppos)
+ssize_t ppage_generic_read_dir(struct file *filp, char __user *buf,
+		size_t siz, loff_t *ppos)
 {
-	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
 	return  generic_read_dir(filp, buf, siz, ppos);
 }
 
 int ppage_dcache_readdir(struct file *file, struct dir_context *ctx)
 {
-	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
-
 	return dcache_readdir(file, ctx);
 }
 
-struct dentry *ppage_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
+struct dentry
+*ppage_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 {
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- @dentry: %s\n",
-			__func__, dentry->d_name.name);
-
 	return simple_lookup(dir, dentry, flags);
 }
 
-static struct dentry *ppage_root_lookup(struct inode * dir, 
-		struct dentry * dentry, unsigned int flags)
+static struct dentry *ppage_root_lookup(struct inode *dir,
+		struct dentry *dentry, unsigned int flags)
 {
 	struct dentry *pid_dir;
 	struct task_struct *p;
 	const char *dirname = dentry->d_name.name;
 	long pid = -1;
 	char comm[TASK_COMM_LEN] = "", p_comm[TASK_COMM_LEN];
-	
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- @dentry: %s\n",
-			__func__, dirname);
 
 	sscanf(dirname, "%ld.%s", &pid, comm);
 	if (pid == -1 || !(*comm))
@@ -545,18 +515,17 @@ static struct dentry *ppage_root_lookup(struct inode * dir,
 	/* process exists and process name matches */
 	pid_dir = ppagefs_pid_dir(p,
 			dentry->d_sb->s_root);
-	
+
 	put_task_struct(p);
 
 	return pid_dir;
 
 dir_not_found:
-	printk(KERN_DEBUG "[ FAILURE ] --%s-- No such directory\n", __func__);
 	return NULL;
 }
 
-static struct dentry *ppage_fake_lookup(struct inode * dir, 
-		struct dentry * dentry, unsigned int flags)
+static struct dentry *ppage_fake_lookup(struct inode *dir,
+		struct dentry *dentry, unsigned int flags)
 {
 	struct dentry *ret_dentry = NULL;
 	const char *dirname = dentry->d_name.name;
@@ -564,27 +533,20 @@ static struct dentry *ppage_fake_lookup(struct inode * dir,
 		{"total", &ppagefs_file_operations, 0644},
 		{"zero", &ppagefs_file_operations, 0644},
 	};
-	
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- looking up %s\n", __func__, dirname);
-	
-	if ( is_total_file(dentry) ) {
-		if (!(ret_dentry = ppage_create_file(dentry->d_parent, &ppage_files[0], 1))) {
-			printk(KERN_DEBUG "[ DEBUG ] --%s-- create files failed.\n", __func__);
+
+	if (is_total_file(dentry)) {
+		ret_dentry = ppage_create_file(dentry->d_parent,
+				&ppage_files[0], 1)
+		if (!ret_dentry)
 			return NULL;
-		}
-		
-		printk(KERN_DEBUG "[ DEBUG ] --%s-- created total file\n", __func__);
-		
 	}
 
 
-	if ( is_zero_file(dentry) ) {
-		if (!(ret_dentry = ppage_create_file(dentry->d_parent, &ppage_files[1], 1))) {
-			printk(KERN_DEBUG "[ DEBUG ] --%s-- create files failed.\n", __func__);
+	if (is_zero_file(dentry)) {
+		ret_dentry = ppage_create_file(dentry->d_parent,
+				&ppage_files[1], 1)
+		if (!ret_dentry)
 			return NULL;
-		}
-
-		printk(KERN_DEBUG "[ DEBUG ] --%s-- created zero file\n", __func__);
 	}
 
 	return ret_dentry;
@@ -598,23 +560,19 @@ int ppage_fake_dir_open(struct inode *inode, struct file *file)
 		{"total", &ppagefs_file_operations, 0644},
 		{"zero", &ppagefs_file_operations, 0644},
 	};
-	
-	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
-	
+
 	err = dcache_dir_open(inode, file);
 	if (err)
 		return err;
-	
-	if (!(ret_dentry = ppage_create_file(dentry, &ppage_files[0], 0))) {
-		printk(KERN_DEBUG "[ DEBUG ] --%s-- create files failed.\n", __func__);
+
+	ret_dentry = ppage_create_file(dentry, &ppage_files[0], 0)
+	if (!ret_dentry)
 		return -ENOMEM;
-	}
-	
-	if (!(ret_dentry = ppage_create_file(dentry, &ppage_files[1], 0))) {
-		printk(KERN_DEBUG "[ DEBUG ] --%s-- create files failed.\n", __func__);
+
+	ret_dentry = ppage_create_file(dentry, &ppage_files[1], 0)
+	if (!ret_dentry)
 		return -ENOMEM;
-	}
-	
+
 	return err;
 }
 
@@ -627,9 +585,6 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 	size_t ret = 0, size = strlen(data) + 1;
 	loff_t fsize = strlen(data) + 1, fpos = iocb->ki_pos;
 	struct p_info *p_info = inode->i_private;
-	
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- pre-read %s with count=%d, pid=%d\n", 
-			__func__, dentry->d_name.name, dentry->d_lockref.count, p_info->pid);
 
 	if (fpos >= fsize)
 		return ret;
@@ -640,19 +595,12 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 	else
 		size = iter->count;
 
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- fpos: %lld\n", __func__, fpos);
-	
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- copying %s to iter\n", __func__, data);
 	ret = _copy_to_iter(data + fpos, size, iter);
 	iocb->ki_pos += ret;
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- updated kiocb=%lld\n", __func__, iocb->ki_pos);
 
 	// configures this dentry to be deleted after read
-	if (dentry->d_lockref.count != 0) {
+	if (dentry->d_lockref.count != 0)
 		dentry->d_lockref.count = 0;
-	}
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- post-read %s with count=%d", 
-			__func__, dentry->d_name.name, dentry->d_lockref.count);
 
 	return ret;
 }
@@ -661,30 +609,26 @@ struct inode *ppage_get_inode(struct super_block *sb, umode_t mode)
 {
 	struct inode *inode = new_inode(sb);
 
-	if (!inode) {
-		printk(KERN_DEBUG "[ SUCCESS ] --%s-- created inode.\n", __func__);
-	}
-	printk(KERN_DEBUG "[ SUCCESS ] --%s-- created inode.\n", __func__);
-
 	if (inode) {
 		inode->i_ino = get_next_ino();
-		inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+		inode->i_atime = inode->i_mtime =
+			inode->i_ctime = current_time(inode);
 
 		switch (mode & S_IFMT) {
-			case S_IFDIR:
-				inode->i_mode	= S_IFDIR | 0755;
-				inode->i_op	= &ppagefs_dir_inode_operations;
-				inode->i_fop	= &simple_dir_operations;
-				break;
-			case S_IFREG:
-				inode->i_mode	= S_IFREG | 0644;
-				inode->i_op	= &ppagefs_file_inode_operations;
-				inode->i_fop 	= &ppagefs_file_operations;
-				break;
-			default:
-				inode->i_op	= &ppagefs_file_inode_operations;
-				inode->i_fop	= &ppagefs_file_operations;
-				break;
+		case S_IFDIR:
+			inode->i_mode	= S_IFDIR | 0755;
+			inode->i_op	= &ppagefs_dir_inode_operations;
+			inode->i_fop	= &simple_dir_operations;
+			break;
+		case S_IFREG:
+			inode->i_mode	= S_IFREG | 0644;
+			inode->i_op	= &ppagefs_file_inode_operations;
+			inode->i_fop	= &ppagefs_file_operations;
+			break;
+		default:
+			inode->i_op	= &ppagefs_file_inode_operations;
+			inode->i_fop	= &ppagefs_file_operations;
+			break;
 		}
 	}
 
@@ -700,8 +644,6 @@ static void parse_pid_dir_name(const char *dir_name, struct p_info *info)
 	char buf[20];
 	char comm[TASK_COMM_LEN];
 	pid_t pid;
-	
-	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
 
 	strncpy(buf, dir_name, sizeof(buf));
 	buf[sizeof(buf)-1] = '\0';
@@ -725,89 +667,52 @@ fill_err:
  * - deleted on the fly if @count=0
  * - remains if @count=1
  */
-struct dentry *ppage_create_file(struct dentry *parent, const struct tree_descr *file, int count)
+struct dentry *ppage_create_file(struct dentry *parent,
+		const struct tree_descr *file, int count)
 {
-	struct dentry *dentry; 
+	struct dentry *dentry;
 	struct inode *inode;
 	struct p_info *info;
-	
-	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
 
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- parent_is=%s, file is=%s\n", 
-			__func__, parent->d_name.name, file->name);
-	
 	/* attempts to create a folder */
 	dentry = d_alloc_name(parent, file->name);
 	if (!dentry)
-		return NULL; // TODO: check error return values
-	
+		return NULL;
+
 	inode = ppage_get_inode(parent->d_sb, S_IFREG);
 	if (!inode)
 		return NULL;
 
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- linking.\n", __func__);
-
 	d_add(dentry, inode);
-	
+
 	dentry->d_flags |= DCACHE_OP_DELETE;
 	dentry->d_lockref.count = count;
 	dentry->d_op = &ppagefs_d_op;
-	
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- done linking, has %s with count=%d", 
-			__func__, dentry->d_name.name, dentry->d_lockref.count);
-	
+
 	info = kmalloc(sizeof(struct p_info), GFP_KERNEL);
 	parse_pid_dir_name(parent->d_name.name, info);
 
 	inode->i_private = info;
-	
+
 	return dentry;
 }
 
 struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent)
 {
-	struct dentry *dentry; 
+	struct dentry *dentry;
 	struct inode *inode;
-	
+
 	/* attempts to create a folder */
-	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
-
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- parent_is=%s, name is=%s\n", 
-			__func__, parent->d_name.name, name);
-
 	dentry = d_alloc_name(parent, name);
 	if (!dentry)
-		return NULL; // TODO: check error return values
-	
+		return NULL;
+
 	inode = ppage_get_inode(parent->d_sb, S_IFDIR);
 	if (!inode)
 		return NULL;
-	
+
 	d_add(dentry, inode);
 
-	printk(KERN_DEBUG "[ SUCCESS ] --%s-- linked dentry and inode.\n", __func__);
-#if 0
-	/* for debugging purposes */
-	inode->i_private = name;
-
-	/* increment directory counts */
-	inc_nlink(inode);
-	inc_nlink(d_inode(dentry->d_parent));
-	d_add(dentry, inode);
-
-	return dentry;
-
-	/*
-	 * cursor dentry is not backed by d_inode, in which case we skip the
-	 * following. Otherwise, a null dereference would incur
-	 */
-	if (parent->d_inode) {
-		/* increment directory counts */
-		inc_nlink(inode);
-		inc_nlink(d_inode(dentry->d_parent));
-		d_add(dentry, inode);
-	}
-#endif
 	return dentry;
 }
 
@@ -831,15 +736,10 @@ static int ppagefs_fill_super(struct super_block *sb, struct fs_context *fc)
 	if (err)
 		goto fail;
 
-
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- inode_ino=%ld \n", __func__, 
-			sb->s_root->d_inode->i_ino);
-
 	sb->s_root->d_inode->i_op = &ppagefs_root_inode_operations;
 	sb->s_root->d_inode->i_fop = &ppage_dir_operations;
-	if (ppagefs_create_dir("nieh", sb->s_root) == NULL) {
+	if (ppagefs_create_dir("nieh", sb->s_root) == NULL)
 		return -ENOMEM;
-	}
 fail:
 	return err;
 }
@@ -863,6 +763,6 @@ int ppagefs_init_fs_context(struct fs_context *fc)
 
 static int __init ppagefs_init(void)
 {
-	return register_filesystem(&ppage_fs_type);;
+	return register_filesystem(&ppage_fs_type);
 }
 fs_initcall(ppagefs_init);
