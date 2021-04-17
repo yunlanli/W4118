@@ -384,7 +384,8 @@ int ppage_piddir_delete(const struct dentry *dentry)
 	struct inode *inode = d_inode(dentry);
 	struct p_info *info = (struct p_info *) inode->i_private;
 
-	
+	printk(KERN_DEBUG "[ DEBUG ] [%s] %s with retain=%d\n",
+			__func__, dentry->d_name.name, info->retain);
 	/*
 	 * if inode should be retained,
 	 *
@@ -425,15 +426,20 @@ retry:
 	 * if new inode, clean up the previous dentry+inode and set relevant field
 	 */
 	info = inode->i_private;
-	if (!(inode->i_state & I_NEW)) {
+	if (!(inode->i_state & I_NEW) && info) {
+		printk(KERN_DEBUG "[ DEBUG ] [%s] old inode\n", __func__);
 		if (strncmp(info->comm, comm, TASK_COMM_LEN) == 0) {
-			printk(KERN_DEBUG "[ DEBUG ] [%s] old inode %d.%s\n", 
+			printk(KERN_DEBUG "[ DEBUG ] [%s] same/reuse inode %d.%s\n", 
 					__func__, pid, info->comm);
 			info->retain = 1;
 			return inode;
 		}
 
 		/* found but different process name */
+		info->dentry->d_flags |= DCACHE_OP_DELETE;
+		info->dentry->d_op = &ppagefs_piddir_d_ops;
+		info->dentry->d_lockref.count = 1;
+		info->retain = 0;
 		printk(KERN_DEBUG "[ DEBUG ] [%s] delete and go retry\n", __func__);
 		dput(info->dentry);
 		goto retry;
@@ -525,6 +531,8 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 	struct task_struct *p;
 	struct list_head *cursor, *pos, *n;
 	LIST_HEAD(d_list);
+	
+	printk(KERN_DEBUG "[ DEBUG ] [%s]\n", __func__);
 
 	err = dcache_dir_open(inode, file);
 	if (err)
@@ -551,6 +559,7 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 
 	rcu_read_unlock();
 
+	printk(KERN_DEBUG "[ DEBUG ] [%s] sub_dir_interation start\n", __func__);
 	/* delete PID.PROCESSNAME directories where PID is not running */
 	spin_lock(&dentry->d_lock);
 	cursor = dentry->d_subdirs.next;
@@ -574,8 +583,12 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 	}
 	spin_unlock(&dentry->d_lock);
 
+	printk(KERN_DEBUG "[ DEBUG ] [%s] sub_dir_interation end\n", __func__);
+
 	list_for_each_safe(pos, n, &d_list) {
 		struct p_info *info = list_entry(pos, struct p_info, head);
+		printk(KERN_DEBUG "[ DEBUG ] [%s] deleting %s\n",
+				__func__, info->dentry->d_name.name);
 		dput(info->dentry);
 	}
 
@@ -600,6 +613,7 @@ ssize_t ppage_generic_read_dir(struct file *filp, char __user *buf,
 
 int ppage_dcache_readdir(struct file *file, struct dir_context *ctx)
 {
+	printk(KERN_DEBUG "[ DEBUG ] [%s] \n", __func__);
 	return dcache_readdir(file, ctx);
 }
 
@@ -619,6 +633,7 @@ static struct dentry *ppage_root_lookup(struct inode *dir,
 	char comm[TASK_COMM_LEN] = "", p_comm[TASK_COMM_LEN];
 	int match;
 
+	printk(KERN_DEBUG "[ DEBUG ] [%s] \n", __func__);
 	match = sscanf(dirname, "%d.%s", &pid, comm);
 	if (match != 2)
 		goto dir_not_found;
@@ -826,6 +841,7 @@ struct dentry *ppage_create_file(struct dentry *parent,
 struct dentry *ppagefs_create_dir(const char *name, struct inode *inode, struct dentry *parent)
 {
 	struct dentry *dentry;
+	struct p_info *info;
 
 	/* attempts to create a folder */
 	dentry = d_alloc_name(parent, name);
@@ -836,6 +852,8 @@ struct dentry *ppagefs_create_dir(const char *name, struct inode *inode, struct 
 		return NULL;
 
 	d_add(dentry, inode);
+	info = inode->i_private;
+	info->dentry = dentry;
 
 	return dentry;
 }
