@@ -10,6 +10,8 @@
 #include <linux/kernel.h>
 #include <linux/sched/signal.h>
 
+#include "internal.h"
+
 
 static struct dentry
 *ppagefs_create_dir(const char *name, struct inode *inode, struct dentry *parent);
@@ -139,15 +141,6 @@ struct va_info {
 struct expose_count_args {
 	int total;
 	int zero;
-};
-
-/* private information for ppage_create_file */
-struct p_info {
-	pid_t			pid;
-	char			comm[TASK_COMM_LEN];
-	int			retain;
-	struct dentry 		*dentry;
-	struct list_head 	head;
 };
 
 static inline int is_zero_file(const struct dentry *dentry)
