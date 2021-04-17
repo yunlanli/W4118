@@ -451,12 +451,6 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 
 int ppage_dcache_dir_close(struct inode *inode, struct file *file)
 {
-	struct dentry *dentry = file_dentry(file);
-
-	/*
-	 * only minus 1 if multiple are holding this.
-	 * For example, when doing cat
-	 */
 	return  dcache_dir_close(inode, file);
 }
 
@@ -488,15 +482,16 @@ static struct dentry *ppage_root_lookup(struct inode *dir,
 	struct dentry *pid_dir;
 	struct task_struct *p;
 	const char *dirname = dentry->d_name.name;
-	long pid = -1;
+	pid_t pid;
 	char comm[TASK_COMM_LEN] = "", p_comm[TASK_COMM_LEN];
+	int match;
 
-	sscanf(dirname, "%ld.%s", &pid, comm);
-	if (pid == -1 || !(*comm))
+	match = sscanf(dirname, "%d.%s", &pid, comm);
+	if (match != 2)
 		goto dir_not_found;
 
 	rcu_read_lock();
-	p = find_task_by_vpid((pid_t) pid);
+	p = find_task_by_vpid(pid);
 	rcu_read_unlock();
 
 	if (!p)
@@ -528,7 +523,6 @@ static struct dentry *ppage_fake_lookup(struct inode *dir,
 		struct dentry *dentry, unsigned int flags)
 {
 	struct dentry *ret_dentry = NULL;
-	const char *dirname = dentry->d_name.name;
 	static const struct tree_descr ppage_files[] = {
 		{"total", &ppagefs_file_operations, 0644},
 		{"zero", &ppagefs_file_operations, 0644},
@@ -536,7 +530,7 @@ static struct dentry *ppage_fake_lookup(struct inode *dir,
 
 	if (is_total_file(dentry)) {
 		ret_dentry = ppage_create_file(dentry->d_parent,
-				&ppage_files[0], 1)
+				&ppage_files[0], 1);
 		if (!ret_dentry)
 			return NULL;
 	}
@@ -544,7 +538,7 @@ static struct dentry *ppage_fake_lookup(struct inode *dir,
 
 	if (is_zero_file(dentry)) {
 		ret_dentry = ppage_create_file(dentry->d_parent,
-				&ppage_files[1], 1)
+				&ppage_files[1], 1);
 		if (!ret_dentry)
 			return NULL;
 	}
@@ -565,11 +559,11 @@ int ppage_fake_dir_open(struct inode *inode, struct file *file)
 	if (err)
 		return err;
 
-	ret_dentry = ppage_create_file(dentry, &ppage_files[0], 0)
+	ret_dentry = ppage_create_file(dentry, &ppage_files[0], 0);
 	if (!ret_dentry)
 		return -ENOMEM;
 
-	ret_dentry = ppage_create_file(dentry, &ppage_files[1], 0)
+	ret_dentry = ppage_create_file(dentry, &ppage_files[1], 0);
 	if (!ret_dentry)
 		return -ENOMEM;
 
@@ -580,11 +574,9 @@ ssize_t
 ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct dentry *dentry = file_dentry(iocb->ki_filp);
-	struct inode *inode = file_inode(iocb->ki_filp);
 	char *data = "50\n";
 	size_t ret = 0, size = strlen(data) + 1;
 	loff_t fsize = strlen(data) + 1, fpos = iocb->ki_pos;
-	struct p_info *p_info = inode->i_private;
 
 	if (fpos >= fsize)
 		return ret;
@@ -644,13 +636,14 @@ static void parse_pid_dir_name(const char *dir_name, struct p_info *info)
 	char buf[20];
 	char comm[TASK_COMM_LEN];
 	pid_t pid;
+	int match;
 
 	strncpy(buf, dir_name, sizeof(buf));
 	buf[sizeof(buf)-1] = '\0';
 
 	// parses the pid and message
-	sscanf(dir_name, "%d.%s", &pid, comm);
-	if (pid < 0 || !(*comm))
+	match = sscanf(dir_name, "%d.%s", &pid, comm);
+	if (match != 2)
 		goto fill_err;
 
 	info->pid = pid;
@@ -719,14 +712,7 @@ struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent)
 static int ppagefs_fill_super(struct super_block *sb, struct fs_context *fc)
 {
 	int err = 0;
-	static const struct tree_descr ppage_files[] = {
-		{NULL},
-		{NULL},
-		{"jason", &ppagefs_file_operations, S_IRUSR | S_IWUSR},
-		{"yunlan", &ppagefs_file_operations, S_IRUSR | 01000},
-		{"dashi", &ppagefs_file_operations, 0755},
-		{""}
-	};
+	static const struct tree_descr ppage_files[] = {{""}};
 
 	/*
 	 * @ppage_files: contains information about all directories under
