@@ -18,8 +18,8 @@ struct p_info {
 	pid_t			pid;
 	char			comm[TASK_COMM_LEN];
 	int			retain;
-	struct dentry 		*dentry;
-	struct list_head 	head;
+	struct dentry		*dentry;
+	struct list_head	head;
 };
 
 static inline int is_zero_file(const struct dentry *dentry)
@@ -47,8 +47,8 @@ static inline int is_zero_or_total_file(const struct dentry *dentry)
 	return is_total_file(dentry) || is_zero_file(dentry);
 }
 
-static struct dentry
-*ppagefs_create_dir(const char *name, struct inode *inode, struct dentry *parent);
+static struct dentry *ppagefs_create_dir(const char *name,
+		struct inode *inode, struct dentry *parent);
 
 static struct inode *ppage_get_inode(struct super_block *sb, umode_t flags);
 
@@ -59,11 +59,6 @@ static struct dentry *ppage_fake_lookup(struct inode *dir,
 
 static struct dentry *ppage_create_file(struct dentry *parent,
 		const struct tree_descr *files, int count);
-
-static struct dentry *ppage_lookup(struct inode *dir,
-		struct dentry *dentry, unsigned int flags);
-
-static int ppage_simple_unlink(struct inode *dir, struct dentry *dentry);
 
 static struct dentry *ppage_root_lookup(struct inode *dir,
 		struct dentry *dentry, unsigned int flags);
