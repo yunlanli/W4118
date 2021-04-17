@@ -134,6 +134,37 @@ struct expose_count_args{
 	int zero;
 };
 
+/* private information for ppage_create_file */
+struct p_info{
+	pid_t pid;
+	char comm[TASK_COMM_LEN];
+};
+
+static inline int is_zero_file(const struct dentry *dentry)
+{
+	const char *dirname = dentry->d_name.name;
+	const char *zero = "zero";
+	const size_t len_d = strlen(dirname);
+	const size_t len_z = strlen(zero);
+	
+	return (len_d == len_z && strncmp(dirname, zero, len_z) == 0);
+}
+
+static inline int is_total_file(const struct dentry *dentry)
+{
+	const char *dirname = dentry->d_name.name;
+	const char *total = "total";
+	const size_t len_d = strlen(dirname);
+	const size_t len_t = strlen(total);
+	
+	return (len_d == len_t && strncmp(dirname, total, len_t) == 0);
+}
+
+static inline int is_zero_or_total_file(const struct dentry *dentry)
+{	
+	return is_total_file(dentry) || is_zero_file(dentry);
+}
+
 void pfn_rb_insert(struct rb_root *root, struct pfn_node *new, struct expose_count_args *args)
 {
 	struct rb_node **node = &root->rb_node, *parent;
@@ -346,13 +377,18 @@ int ppage_simple_unlink(struct inode *dir, struct dentry *dentry)
 
 int ppage_delete(const struct dentry * dentry)
 {
+	struct inode *inode;
 	printk(KERN_DEBUG "[ DEBUG ] --%s-- dentry=%s ref_count=%d with flag=%x\n", 
 			__func__, 
 			dentry->d_name.name,
 			dentry->d_lockref.count,
 			dentry->d_flags);
 
-	// return dentry->d_lockref.count == 0 ? 1 : 0;
+	if ( is_zero_or_total_file(dentry) ) {
+		inode = dentry->d_inode;
+		kfree(inode->i_private);
+	}
+
 	return 1;
 }
 
@@ -503,7 +539,6 @@ static struct dentry *ppage_root_lookup(struct inode * dir,
 	
 	put_task_struct(p);
 
-
 	return pid_dir;
 
 dir_not_found:
@@ -520,15 +555,10 @@ static struct dentry *ppage_fake_lookup(struct inode * dir,
 		{"total", &ppagefs_file_operations, 0644},
 		{"zero", &ppagefs_file_operations, 0644},
 	};
-	const char *zero = ppage_files[1].name;
-	const char *total = ppage_files[0].name;
-	const size_t len_d = strlen(dirname);
-	const size_t len_z = strlen(zero);
-	const size_t len_t = strlen(total);
 	
 	printk(KERN_DEBUG "[ DEBUG ] --%s-- looking up %s\n", __func__, dirname);
 	
-	if (len_d == len_t && strncmp(dirname, total, len_t) == 0) {
+	if ( is_total_file(dentry) ) {
 		if (!(ret_dentry = ppage_create_file(dentry->d_parent, &ppage_files[0], 1))) {
 			printk(KERN_DEBUG "[ DEBUG ] --%s-- create files failed.\n", __func__);
 			return NULL;
@@ -539,7 +569,7 @@ static struct dentry *ppage_fake_lookup(struct inode * dir,
 	}
 
 
-	if (len_d == len_z && strncmp(dirname, zero, len_d) == 0) {
+	if ( is_zero_file(dentry) ) {
 		if (!(ret_dentry = ppage_create_file(dentry->d_parent, &ppage_files[1], 1))) {
 			printk(KERN_DEBUG "[ DEBUG ] --%s-- create files failed.\n", __func__);
 			return NULL;
@@ -583,12 +613,14 @@ ssize_t
 ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct dentry *dentry = file_dentry(iocb->ki_filp);
+	struct inode *inode = file_inode(iocb->ki_filp);
 	char *data = "50\n";
 	size_t ret = 0, size = strlen(data) + 1;
 	loff_t fsize = strlen(data) + 1, fpos = iocb->ki_pos;
+	struct p_info *p_info = inode->i_private;
 	
-	printk(KERN_DEBUG "[ DEBUG ] --%s-- pre-read %s with count=%d", 
-			__func__, dentry->d_name.name, dentry->d_lockref.count);
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- pre-read %s with count=%d, pid=%d\n", 
+			__func__, dentry->d_name.name, dentry->d_lockref.count, p_info->pid);
 
 	if (fpos >= fsize)
 		return ret;
@@ -651,6 +683,35 @@ struct inode *ppage_get_inode(struct super_block *sb, umode_t mode)
 }
 
 /**
+ * fills in the @info by parsing dir_name
+ * - if something went wrong, @info->pid = -1;
+ */
+static void parse_pid_dir_name(const char *dir_name, struct p_info *info)
+{
+	char buf[20];
+	char comm[TASK_COMM_LEN];
+	pid_t pid;
+	
+	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
+
+	strncpy(buf, dir_name, sizeof(buf));
+	buf[sizeof(buf)-1] = '\0';
+
+	// parses the pid and message
+	sscanf(dir_name, "%d.%s", &pid, comm);
+	if (pid < 0 || !(*comm))
+		goto fill_err;
+
+	info->pid = pid;
+	strncpy(info->comm, comm, TASK_COMM_LEN);
+
+	return;
+
+fill_err:
+	info->pid = -1;
+}
+
+/**
  * This function will create files that will be:
  * - deleted on the fly if @count=0
  * - remains if @count=1
@@ -659,6 +720,7 @@ struct dentry *ppage_create_file(struct dentry *parent, const struct tree_descr 
 {
 	struct dentry *dentry; 
 	struct inode *inode;
+	struct p_info *info;
 	
 	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
 
@@ -684,6 +746,11 @@ struct dentry *ppage_create_file(struct dentry *parent, const struct tree_descr 
 	
 	printk(KERN_DEBUG "[ DEBUG ] --%s-- done linking, has %s with count=%d", 
 			__func__, dentry->d_name.name, dentry->d_lockref.count);
+	
+	info = kmalloc(sizeof(struct p_info), GFP_KERNEL);
+	parse_pid_dir_name(parent->d_name.name, info);
+
+	inode->i_private = info;
 	
 	return dentry;
 }
