@@ -417,6 +417,7 @@ struct dentry *ppagefs_pid_dir(struct task_struct *p, struct dentry *parent)
 	dir->d_op = &ppage_dentry_operations;
 	dir->d_lockref.count = 0;
 	*/
+	
 	// changes file operation such as open
 	dir->d_inode->i_fop = &ppagefs_fake_dir_operations;
 	dir->d_inode->i_op = &ppagefs_fake_dir_inode_operations;
@@ -431,6 +432,7 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 	int err = 0;
 	struct dentry *dentry, *pid_dir;
 	struct task_struct *p;
+	int i = 0; //tmp
 	
 	printk(KERN_DEBUG "[ DEBUG ] --%s--\n", __func__);
 
@@ -458,6 +460,10 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 					  "create %d/ failed.\n",
 					__func__, task_pid_vnr(p));
 			return -ENOMEM;
+		}
+
+		if (i++ == 2) {
+			break;
 		}
 	}
 
@@ -511,6 +517,9 @@ static struct dentry *ppage_root_lookup(struct inode * dir,
 	const char *dirname = dentry->d_name.name;
 	long pid = -1;
 	char comm[TASK_COMM_LEN] = "", p_comm[TASK_COMM_LEN];
+	
+	printk(KERN_DEBUG "[ DEBUG ] --%s-- @dentry: %s\n",
+			__func__, dirname);
 
 	sscanf(dirname, "%ld.%s", &pid, comm);
 	if (pid == -1 || !(*comm))
