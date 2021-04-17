@@ -408,13 +408,63 @@ int ppage_fake_dir_open(struct inode *inode, struct file *file)
 	return err;
 }
 
+static inline struct task_struct *process_exists(struct p_info *info)
+{
+	struct task_struct *p;
+	pid_t pid = info->pid;
+	const char *comm = info->comm;
+
+	rcu_read_lock();
+	p = find_task_by_vpid(pid);
+	rcu_read_unlock();
+
+	if (!p)
+		return NULL;
+	if (strncmp(p->comm, comm, TASK_COMM_LEN) != 0)
+		return NULL;
+	
+	printk(KERN_DEBUG "[ %s ] found prcess %d.%s\n",
+			__func__, pid, p->comm);
+
+	return p;
+}
+
 ssize_t
 ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 {
+	char data[70];
 	struct dentry *dentry = file_dentry(iocb->ki_filp);
-	char *data = "50\n";
-	size_t ret = 0, size = strlen(data) + 1;
-	loff_t fsize = strlen(data) + 1, fpos = iocb->ki_pos;
+	struct p_info *p_info = dentry->d_inode->i_private;
+	struct task_struct *p;
+	size_t ret = 0, size;
+	struct expose_count_args args = {0, 0};
+	struct va_info lst;
+	loff_t fsize, fpos = iocb->ki_pos;
+	lst.root = &RB_ROOT;
+
+	printk(KERN_DEBUG "[ %s ] entered %s fpos=%lld, iter->count=%ld\n",
+			__func__, dentry->d_name.name, fpos, iter->count);
+
+	if (!(p = process_exists(p_info))) {
+		return 0;
+	}
+
+	get_task_struct(p);
+	mmap_walk(p->mm, &args, &lst);
+	put_task_struct(p);
+
+	if (is_zero_file(dentry)) {
+		snprintf(data, sizeof(data), "%ld\n", args.zero);
+		printk(KERN_DEBUG "[ %s ] zero_file %ld to_string=%s size=%ld", 
+				__func__, args.zero, data, strlen(data) + 1);
+	}else {
+		snprintf(data, sizeof(data), "%ld\n", args.total);
+		printk(KERN_DEBUG "[ %s ] total_file %ld to_string=%s size=%ld", 
+				__func__, args.total, data, strlen(data) + 1);
+	}
+
+	fsize = strlen(data) + 1;
+	size = strlen(data) + 1;
 
 	if (fpos >= fsize)
 		return ret;
@@ -424,10 +474,12 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 		size -= fpos;
 	else
 		size = iter->count;
-
+	
 	ret = _copy_to_iter(data + fpos, size, iter);
 	iocb->ki_pos += ret;
-
+		
+	printk(KERN_DEBUG "[ %s ] copied byte=%ld\n", __func__, ret);
+	
 	// configures this dentry to be deleted after read
 	if (dentry->d_lockref.count != 0)
 		dentry->d_lockref.count = 0;

@@ -2,6 +2,8 @@
 #define __PAGEWALK_H__
 
 #include <linux/kernel.h>
+#include <linux/slab.h>
+#include <linux/hugetlb_inline.h>
 
 struct pfn_node {
 	struct rb_node node;
@@ -9,12 +11,14 @@ struct pfn_node {
 };
 
 struct va_info {
-	pte_t last_pte;
+	struct rb_root *root;
+	unsigned long new_pfn;
 };
 
-struct expose_count_args {
-	int total;
-	int zero;
+struct expose_count_args 
+{
+	unsigned long total;
+	unsigned long zero;
 };
 
 extern int mmap_walk(struct mm_struct *srcmm,
