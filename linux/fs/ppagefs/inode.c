@@ -12,7 +12,7 @@
 
 
 static struct dentry
-*ppagefs_create_dir(const char *name, struct dentry *parent);
+*ppagefs_create_dir(const char *name, struct inode *inode, struct dentry *parent);
 
 static struct inode *ppage_get_inode(struct super_block *sb, umode_t flags);
 
@@ -412,22 +412,53 @@ int ppage_file_delete(const struct dentry *dentry)
 	return 1;
 }
 
-static inline struct p_info
-*init_piddir_p_info(pid_t pid, const char *comm, struct dentry *dir)
+struct inode *ppagefs_pid_dir_inode(pid_t pid, const char *comm, struct dentry *parent)
 {
+	struct inode *inode;
 	struct p_info *info;
+retry:
+	printk(KERN_DEBUG "[ DEBUG ] [%s]\n", __func__);
+	/* obtains the inode with ino=pid */
+	inode = iget_locked(parent->d_sb, pid);
+	/* 
+	 * if old inode, set retained and return old dentry
+	 * if new inode, clean up the previous dentry+inode and set relevant field
+	 */
+	info = inode->i_private;
+	if (!(inode->i_state & I_NEW)) {
+		if (strncmp(info->comm, comm, TASK_COMM_LEN) == 0) {
+			printk(KERN_DEBUG "[ DEBUG ] [%s] old inode %d.%s\n", 
+					__func__, pid, info->comm);
+			info->retain = 1;
+			return inode;
+		}
 
+		/* found but different process name */
+		printk(KERN_DEBUG "[ DEBUG ] [%s] delete and go retry\n", __func__);
+		dput(info->dentry);
+		goto retry;
+	}
+	/* new inode, sets relevant field */
 	info = kmalloc(sizeof(struct p_info), GFP_KERNEL);
-	if (!info)
-		return NULL;
 
-	info->pid = pid;
-	strncpy(info->comm, comm, sizeof(info->comm));
+	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+	inode->i_private = info;
+	inode->i_fop = &ppagefs_fake_dir_operations;
+	inode->i_op = &ppagefs_fake_dir_inode_operations;
+	inode->i_mode	= S_IFDIR | 0755;
+
+	/* set private data */
 	info->retain = 1;
-	info->dentry = dir;
+	info->pid = pid;
+	strncpy(info->comm, comm, TASK_COMM_LEN);
+	info->dentry = NULL;
 	INIT_LIST_HEAD(&info->head);
-
-	return info;
+			
+	printk(KERN_DEBUG "[ DEBUG ] [%s] new inode initialized %d\n", 
+					__func__, info->pid);
+	
+	unlock_new_inode(inode);
+	return inode;
 }
 
 struct dentry *ppagefs_pid_dir(struct task_struct *p, struct dentry *parent)
@@ -437,47 +468,32 @@ struct dentry *ppagefs_pid_dir(struct task_struct *p, struct dentry *parent)
 	struct dentry *dir;
 	struct p_info *info;
 	struct inode *inode;
+	
+	printk(KERN_DEBUG "[ DEBUG ] [%s]\n", __func__);
 
 	pid = task_pid_vnr(p);
+	inode = ppagefs_pid_dir_inode(pid, p->comm, parent);
+	info = inode->i_private;
 
-#if 0
-	/* call i_getlocked() */
-	inode = i_getlocked(pid);
-	if (!(inode->i_state & I_NEW)) {
-		if (strncmp(inode->i_private->comm,
-				p->comm, TASK_COMM_LEN) == 0) {
-			inode->i_private->retain = 1;
-			goto found;
-		}
-
-		dput(inode->i_private->dentry);
-		goto create_new_dir;
+	/* if has dentry, then we are done */
+	if (info->dentry) {
+		return info->dentry;
 	}
-found:
-
-create_new_dir:
-#endif
+	
+	/* create new dentry and link the inode */
+	printk(KERN_DEBUG "[ DEBUG ] [%s] new_dir \n", __func__);
+	
 	/* construct directory name and escape '/' */
 	snprintf(buf, sizeof(buf), "%d.%s", pid, p->comm);
 	strreplace(buf, '/', '-');
 
-	dir = ppagefs_create_dir(buf, parent);
+	dir = ppagefs_create_dir(buf, inode, parent);
 	if (!dir)
 		goto create_dir_fail;
 
 	dir->d_flags |= DCACHE_OP_DELETE;
 	dir->d_op = &ppagefs_piddir_d_ops;
 	dir->d_lockref.count = 0;
-
-	/* initializes ppagefs specific information in i_private */
-	info = init_piddir_p_info(pid, p->comm, dir);
-	if (!info)
-		goto create_dir_fail;
-
-	/* customized operations and private field */
-	dir->d_inode->i_private = info;
-	dir->d_inode->i_fop = &ppagefs_fake_dir_operations;
-	dir->d_inode->i_op = &ppagefs_fake_dir_inode_operations;
 
 	return dir;
 
@@ -787,17 +803,15 @@ struct dentry *ppage_create_file(struct dentry *parent,
 	return dentry;
 }
 
-struct dentry *ppagefs_create_dir(const char *name, struct dentry *parent)
+struct dentry *ppagefs_create_dir(const char *name, struct inode *inode, struct dentry *parent)
 {
 	struct dentry *dentry;
-	struct inode *inode;
 
 	/* attempts to create a folder */
 	dentry = d_alloc_name(parent, name);
 	if (!dentry)
 		return NULL;
 
-	inode = ppage_get_inode(parent->d_sb, S_IFDIR);
 	if (!inode)
 		return NULL;
 
@@ -821,8 +835,6 @@ static int ppagefs_fill_super(struct super_block *sb, struct fs_context *fc)
 
 	sb->s_root->d_inode->i_op = &ppagefs_root_inode_operations;
 	sb->s_root->d_inode->i_fop = &ppage_dir_operations;
-	if (ppagefs_create_dir("nieh", sb->s_root) == NULL)
-		return -ENOMEM;
 fail:
 	return err;
 }
