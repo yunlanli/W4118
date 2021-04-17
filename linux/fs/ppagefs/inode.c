@@ -500,6 +500,24 @@ struct dentry *ppagefs_pid_dir(struct task_struct *p, struct dentry *parent)
 create_dir_fail:
 	return NULL;
 }
+
+static void inline reset_p_info(struct dentry *parent)
+{
+	struct list_head *p;
+
+	spin_lock(&parent->d_lock);
+	p = &parent->d_subdirs;
+	while((p = p->next) != &parent->d_subdirs) {
+		struct dentry *d = list_entry(p, struct dentry, d_child);
+		struct inode *i = d_inode(d);
+		struct p_info *info = i->i_private;
+
+		/* reset */
+		info->retain = 0;
+	}
+	spin_unlock(&parent->d_lock);
+}
+
 int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 {
 	int err = 0;
@@ -513,6 +531,8 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 		return err;
 
 	dentry = file->f_path.dentry;
+
+	reset_p_info(dentry);
 
 	/*
 	 * Create a PID.PROCESSNAME directory for each
