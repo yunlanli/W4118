@@ -386,16 +386,9 @@ int ppage_piddir_delete(const struct dentry *dentry)
 
 	printk(KERN_DEBUG "[ DEBUG ] [%s] %s with retain=%d\n",
 			__func__, dentry->d_name.name, info->retain);
-	/*
-	 * if inode should be retained,
-	 *
-	 * 1. clear the retain field, this will be set again in open
-	 * if the process related to this inode is still running
-	 *
-	 * 2. we return 0 so that it will not be killed by dput
-	 */
+	
 	if (info->retain)
-		return info->retain = 0;
+		return 0;
 
 	kfree(inode->i_private);
 	return 1;
@@ -511,6 +504,7 @@ static void inline reset_p_info(struct dentry *parent)
 {
 	struct list_head *p;
 
+	printk(KERN_DEBUG "[ DEBUG ] [%s]\n", __func__);
 	spin_lock(&parent->d_lock);
 	p = &parent->d_subdirs;
 	while((p = p->next) != &parent->d_subdirs) {
@@ -522,6 +516,7 @@ static void inline reset_p_info(struct dentry *parent)
 		info->retain = 0;
 	}
 	spin_unlock(&parent->d_lock);
+	printk(KERN_DEBUG "[ DEBUG ] [%s] done resetting \n", __func__);
 }
 
 int ppage_dcache_dir_open(struct inode *inode, struct file *file)
@@ -562,17 +557,11 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 	printk(KERN_DEBUG "[ DEBUG ] [%s] sub_dir_interation start\n", __func__);
 	/* delete PID.PROCESSNAME directories where PID is not running */
 	spin_lock(&dentry->d_lock);
-	cursor = dentry->d_subdirs.next;
-	while(cursor != &dentry->d_subdirs) {
+	cursor = &dentry->d_subdirs;
+	while((cursor = cursor->next) != &dentry->d_subdirs) {
 		struct dentry *d = list_entry(cursor, struct dentry, d_child);
 		struct inode *i = d_inode(d);
 		struct p_info *info = i->i_private;
-
-		/*
-		 * get the next element before
-		 * possible deletion of current dentry
-		 */
-		cursor = cursor->next;
 
 		/*
 		 * add dentry to delete to d_list, and dput later
