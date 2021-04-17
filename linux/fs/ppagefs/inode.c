@@ -487,7 +487,7 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 	int err = 0;
 	struct dentry *dentry, *pid_dir;
 	struct task_struct *p;
-	int i = 0; //tmp
+	struct list_head *cursor;
 
 	err = dcache_dir_open(inode, file);
 	if (err)
@@ -508,12 +508,28 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 
 		if (!pid_dir)
 			return -ENOMEM;
-
-		if (i++ == 2)
-			break;
 	}
 
 	rcu_read_unlock();
+
+	/* delete PID.PROCESSNAME directories where PID is not running */
+	spin_lock(&dentry->d_lock);
+	cursor = dentry->d_subdirs.next;
+	while(cursor != &dentry->d_subdirs) {
+		struct dentry *d = list_entry(cursor, struct dentry, d_child);
+		struct inode *i = d_inode(d);
+		struct p_info *info = i->i_private;
+
+		/*
+		 * get the next element before
+		 * possible deletion of current dentry
+		 */
+		cursor = cursor->next;
+
+		if(!info->retain)
+			dput(info->dentry);
+	}
+	spin_unlock(&dentry->d_lock);
 
 	return err;
 }
