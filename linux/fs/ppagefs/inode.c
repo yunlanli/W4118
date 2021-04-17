@@ -1,17 +1,56 @@
 #include "internal.h"
 #include "pagewalk.h"
 
-static const struct inode_operations ppagefs_dir_inode_operations = {
-	.lookup		= ppage_lookup,
-	.link		= simple_link,
-	.unlink		= ppage_simple_unlink,
-	.rmdir		= simple_rmdir,
-	.rename		= simple_rename,
+/* filesystem specific structures */
+static struct file_system_type ppage_fs_type = {
+	.name =		"ppagefs",
+	.init_fs_context = ppagefs_init_fs_context,
+	.kill_sb =	kill_litter_super,
+};
+
+static const struct fs_context_operations ppagefs_context_ops = {
+	.free		= ppage_free_fc,
+	.get_tree	= ppage_get_tree,
+};
+
+/* ppagefs root directory operations */
+static const struct inode_operations ppagefs_root_inode_operations = {
+	.lookup		= ppage_root_lookup,
 	.permission	= generic_permission,
 };
 
-static const struct inode_operations ppagefs_root_inode_operations = {
-	.lookup		= ppage_root_lookup,
+const struct file_operations ppage_root_dir_operations = {
+	.open		= ppage_dcache_dir_open,
+	.release	= ppage_dcache_dir_close,
+	.llseek		= ppage_dcache_dir_lseek,
+	.read		= ppage_generic_read_dir,
+	.iterate_shared	= ppage_dcache_readdir,
+	.fsync		= noop_fsync,
+};
+
+/* ppagefs PID.PROCESSNAME directory operations */
+static const struct inode_operations ppagefs_piddir_inode_operations = {
+	.lookup		= ppage_fake_lookup,
+	.permission	= generic_permission,
+};
+
+const struct file_operations ppagefs_piddir_operations = {
+	.open		= ppage_fake_dir_open,
+	.release	= ppage_dcache_dir_close,
+	.llseek		= ppage_dcache_dir_lseek,
+	.read		= ppage_generic_read_dir,
+	.iterate_shared	= ppage_dcache_readdir,
+	.fsync		= noop_fsync,
+};
+
+const struct dentry_operations ppagefs_piddir_d_ops = {
+	.d_delete	= ppage_piddir_delete,
+};
+
+/* ppagefs file {zero | total} operations */
+const struct inode_operations ppagefs_file_inode_operations = {
+	.setattr	= simple_setattr,
+	.getattr	= simple_getattr,
 	.permission	= generic_permission,
 };
 
@@ -24,52 +63,8 @@ const struct file_operations ppagefs_file_operations = {
 	.llseek		= generic_file_llseek,
 };
 
-static const struct fs_context_operations ppagefs_context_ops = {
-	.free		= ppage_free_fc,
-	.get_tree	= ppage_get_tree,
-};
-
-const struct file_operations ppage_dir_operations = {
-	.open		= ppage_dcache_dir_open,
-	.release	= ppage_dcache_dir_close,
-	.llseek		= ppage_dcache_dir_lseek,
-	.read		= ppage_generic_read_dir,
-	.iterate_shared	= ppage_dcache_readdir,
-	.fsync		= noop_fsync,
-};
-
-static const struct inode_operations ppagefs_fake_dir_inode_operations = {
-	.lookup		= ppage_fake_lookup,
-	.permission	= generic_permission,
-};
-
-const struct file_operations ppagefs_fake_dir_operations = {
-	.open		= ppage_fake_dir_open,
-	.release	= ppage_dcache_dir_close,
-	.llseek		= ppage_dcache_dir_lseek,
-	.read		= ppage_generic_read_dir,
-	.iterate_shared	= ppage_dcache_readdir,
-	.fsync		= noop_fsync,
-};
-
-const struct inode_operations ppagefs_file_inode_operations = {
-	.setattr	= simple_setattr,
-	.getattr	= simple_getattr,
-	.permission	= generic_permission,
-};
-
-const struct dentry_operations ppagefs_piddir_d_ops = {
-	.d_delete	= ppage_piddir_delete,
-};
-
 static const struct dentry_operations ppagefs_file_d_ops = {
 	.d_delete	= ppage_file_delete,
-};
-
-static struct file_system_type ppage_fs_type = {
-	.name =		"ppagefs",
-	.init_fs_context = ppagefs_init_fs_context,
-	.kill_sb =	kill_litter_super,
 };
 
 ssize_t
@@ -143,8 +138,8 @@ retry:
 
 	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
 	inode->i_private = info;
-	inode->i_fop = &ppagefs_fake_dir_operations;
-	inode->i_op = &ppagefs_fake_dir_inode_operations;
+	inode->i_fop = &ppagefs_piddir_operations;
+	inode->i_op = &ppagefs_piddir_inode_operations;
 	inode->i_mode	= S_IFDIR | 0755;
 
 	/* set private data */
@@ -447,8 +442,8 @@ struct inode *ppage_get_inode(struct super_block *sb, umode_t mode)
 		switch (mode & S_IFMT) {
 		case S_IFDIR:
 			inode->i_mode	= S_IFDIR | 0755;
-			inode->i_op	= &ppagefs_dir_inode_operations;
-			inode->i_fop	= &simple_dir_operations;
+			inode->i_op	= &ppagefs_piddir_inode_operations;
+			inode->i_fop	= &ppagefs_piddir_operations;
 			break;
 		case S_IFREG:
 			inode->i_mode	= S_IFREG | 0644;
@@ -562,7 +557,7 @@ static int ppagefs_fill_super(struct super_block *sb, struct fs_context *fc)
 		goto fail;
 
 	sb->s_root->d_inode->i_op = &ppagefs_root_inode_operations;
-	sb->s_root->d_inode->i_fop = &ppage_dir_operations;
+	sb->s_root->d_inode->i_fop = &ppage_root_dir_operations;
 fail:
 	return err;
 }
