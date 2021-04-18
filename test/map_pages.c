@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -17,6 +18,39 @@
 #define MAP_FLAGS		MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE
 #define START_ADDR		0x556e088ff000
 
+void do_inspect(pid_t pid)
+{
+	char *argv[3];
+	int i = 0;
+
+	for (i = 0; i < 3; i++) {
+		argv[i] = malloc(16 * sizeof(char));
+		if (argv[i] == NULL) {
+			printf(ANSI_COLOR_RED "[ ERROR ] malloc() error\n");
+			return;
+		}
+	}
+
+	strcpy(argv[0], "./inspect_pages");
+	sprintf(argv[1], "%d", pid);
+	argv[2] = NULL;
+
+	printf(ANSI_COLOR_GREEN "[ INFO ] %s %s", argv[0], argv[1]);
+	printf("\n");
+
+	i = fork();
+	if (i < 0) {
+		printf(ANSI_COLOR_RED "[ ERROR ] fork() failed. exit test.\n");
+		return;
+	} else if (i == 0) {
+		execv(argv[0], argv);
+		printf(ANSI_COLOR_RED "[ ERROR ] exec error\n");
+		exit(1);
+	} else {
+		wait(NULL);
+	}
+}
+
 static inline void zero_page(int *start)
 {
 	for (int i = 0; i < NUM_PAGES; i++)
@@ -32,6 +66,9 @@ static inline void non_zero_page(int *start)
 int main()
 {
 	int *addr;
+	pid_t pid = getpid();
+
+	do_inspect(pid);
 
 	/* map zero pages */
 	fprintf(stderr, ANSI_COLOR_PURPLE
@@ -47,6 +84,8 @@ int main()
 		goto err;
 	}
 
+	do_inspect(pid);
+
 
 	/* transform zero pages to non-zero pages */
 	fprintf(stderr, ANSI_COLOR_PURPLE
@@ -56,6 +95,7 @@ int main()
 	fflush(stdin);
 
 	zero_page(addr);
+	do_inspect(pid);
 
 
 	/* scrub non-zero pages to zero pages */
@@ -66,6 +106,7 @@ int main()
 	fflush(stdin);
 
 	non_zero_page(addr);
+	do_inspect(pid);
 
 
 	/* unmap pages */
@@ -82,11 +123,15 @@ int main()
 		goto err;
 	}
 
+	do_inspect(pid);
+
 
 	/* exit */
 	fprintf(stderr, ANSI_COLOR_PURPLE "Press enter to exit...\n");
 	getchar();
 	fflush(stdin);
+
+	do_inspect(pid);
 
 	return 0;
 
