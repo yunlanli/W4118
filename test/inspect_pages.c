@@ -154,7 +154,7 @@ int main(int argc, char **argv)
 	name = get_process_name(pid);
 
 	snprintf(ppagefs_path, sizeof(ppagefs_path),
-			"/ppagefs/%d.%s", pid, name);
+			"/mnt/%d.%s", pid, name);
 	zero = get_pages(ppagefs_path, "zero");
 	total = get_pages(ppagefs_path, "total");
 
