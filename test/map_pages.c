@@ -84,6 +84,7 @@ int main()
 		goto err;
 	}
 
+	zero_page(addr);
 	do_inspect(pid);
 
 
@@ -94,7 +95,7 @@ int main()
 	getchar();
 	fflush(stdin);
 
-	zero_page(addr);
+	non_zero_page(addr);
 	do_inspect(pid);
 
 
@@ -105,7 +106,7 @@ int main()
 	getchar();
 	fflush(stdin);
 
-	non_zero_page(addr);
+	zero_page(addr);
 	do_inspect(pid);
 
 
@@ -130,8 +131,6 @@ int main()
 	fprintf(stderr, ANSI_COLOR_PURPLE "Press enter to exit...\n");
 	getchar();
 	fflush(stdin);
-
-	do_inspect(pid);
 
 	return 0;
 
