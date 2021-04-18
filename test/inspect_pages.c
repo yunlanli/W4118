@@ -5,6 +5,11 @@
 #include <errno.h>
 #include <string.h>
 
+#define ANSI_COLOR_RED          "\x1b[31m"
+#define ANSI_COLOR_GREEN        "\x1b[32m"
+#define ANSI_COLOR_PURPLE       "\x1b[35m"
+
+
 #define TASK_COMM_LEN		16
 #define MAX_PAGE_BYTES		32
 
@@ -19,7 +24,8 @@ char *strreplace(char *s, char old, char new)
 static inline int is_pid_valid(pid_t pid)
 {
 	if (pid < 0) {
-		fprintf(stderr, "[ DEBUG ] invalid pid %d\n", pid);
+		fprintf(stderr, ANSI_COLOR_PURPLE
+				"[ DEBUG ] invalid pid %d\n", pid);
 		goto fail;
 	}
 
@@ -38,14 +44,16 @@ static inline int is_pid_running(pid_t pid)
 	/* check if pid is running */
 	f = fopen(path, "r");
 	if (!f) {
-		fprintf(stderr, "[ FAILURE ] %s: No Such File or Directory\n",
+		fprintf(stderr, ANSI_COLOR_RED
+				"[ FAILURE ] %s: No Such File or Directory\n",
 				path);
 		goto fail;
 	}
 
 	ret = fclose(f);
 	if (ret) {
-		fprintf(stderr, "[ ERROR ] %s", strerror(errno));
+		fprintf(stderr, ANSI_COLOR_RED
+				"[ ERROR ] %s", strerror(errno));
 		goto fail;
 	}
 
@@ -67,14 +75,16 @@ static inline char *get_process_name(pid_t pid)
 	/* check if pid is running */
 	f = fopen(buf, "r");
 	if (!f) {
-		fprintf(stderr, "[ FAILURE ] %s: No Such File or Directory\n",
+		fprintf(stderr, ANSI_COLOR_RED
+				"[ FAILURE ] %s: No Such File or Directory\n",
 				buf);
 		goto fail;
 	}
 
 	ret = fread(buf, 1, TASK_COMM_LEN, f);
 	if (!ret && ferror(f)) {
-		fprintf(stderr, "[ ERROR ] %s\n", strerror(errno));
+		fprintf(stderr, ANSI_COLOR_RED
+				"[ ERROR ] %s\n", strerror(errno));
 		fclose(f);
 		goto fail;
 	}
@@ -97,14 +107,15 @@ static inline unsigned long get_pages(const char *path, const char *file)
 	snprintf(buf, sizeof(buf), "%s/%s", path, file);
 	f = fopen(buf, "r");
 	if (!f) {
-		fprintf(stderr, "[ FAILURE ] %s: No Such File or Directory\n",
+		fprintf(stderr, ANSI_COLOR_RED
+				"[ FAILURE ] %s: No Such File or Directory\n",
 				buf);
 		goto fail;
 	}
 
 	ret = fread(buf, 1, TASK_COMM_LEN, f);
 	if (!ret && ferror(f)) {
-		fprintf(stderr, "[ ERROR ] %s\n", strerror(errno));
+		fprintf(stderr, ANSI_COLOR_RED "[ ERROR ] %s\n", strerror(errno));
 		fclose(f);
 		goto fail;
 	}
@@ -147,7 +158,8 @@ int main(int argc, char **argv)
 	zero = get_pages(ppagefs_path, "zero");
 	total = get_pages(ppagefs_path, "total");
 
-	fprintf(stderr, "[ RESULT ] pid: %d, pid->comm: %s, "
+	fprintf(stderr, ANSI_COLOR_GREEN
+			"[ RESULT ] pid: %d, pid->comm: %s, "
 			"zero: %lu, total: %lu\n",
 			pid, name, zero, total);
 	
