@@ -7,7 +7,7 @@ static void pfn_rb_insert(struct expose_count_args *args, struct va_info *lst)
 	struct rb_node **node = &lst->root->rb_node, *parent;
 	unsigned long new_pfn = lst->new_pfn;
 	struct pfn_node *tmp;
-	
+
 	parent = *node;
 
 	/* Go to the bottom of the tree */
@@ -26,7 +26,7 @@ static void pfn_rb_insert(struct expose_count_args *args, struct va_info *lst)
 
 	/* Put the new node there */
 	tmp = kmalloc(sizeof(struct pfn_node), GFP_KERNEL);
-	tmp->pfn = new_pfn; 
+	tmp->pfn = new_pfn;
 	rb_link_node(&tmp->node, parent, node);
 	rb_insert_color(&tmp->node, lst->root);
 
@@ -35,9 +35,10 @@ static void pfn_rb_insert(struct expose_count_args *args, struct va_info *lst)
 	args->total++;
 }
 
-static int count_page(pte_t *pte, struct expose_count_args *args, struct va_info *lst)
+static int count_page(pte_t *pte, struct expose_count_args *args,
+		struct va_info *lst)
 {
-	if (pte_present(*pte)){
+	if (pte_present(*pte)) {
 		lst->new_pfn = pte_pfn(*pte);
 		pfn_rb_insert(args, lst);
 	}
@@ -54,7 +55,7 @@ static inline int pte_walk(pmd_t *src_pmd,
 	struct va_info *lst)
 {
 	pte_t *pte = pte_offset_map(src_pmd, addr);
-	
+
 	for (;;) {
 		if (!pte_none(*pte))
 			count_page(pte, args, lst);
@@ -192,12 +193,12 @@ int mmap_walk(struct mm_struct *srcmm,
 	struct vm_area_struct *mpnt;
 	unsigned long kvaddr;
 	int ret;
-	
+
 	kvaddr = pgd_page_vaddr(*(srcmm->pgd + KERNEL_PGD_BOUNDARY));
 
-	if (!srcmm) {
+	if (!srcmm)
 		return 0;
-	}
+
 	for (mpnt = srcmm->mmap; mpnt; mpnt = mpnt->vm_next) {
 		if (unlikely(is_vm_hugetlb_page(mpnt)))
 			continue;

@@ -163,7 +163,7 @@ retry:
 	strncpy(info->comm, comm, TASK_COMM_LEN);
 	info->dentry = NULL;
 	INIT_LIST_HEAD(&info->head);
-	
+
 	unlock_new_inode(inode);
 	return inode;
 }
@@ -196,7 +196,7 @@ struct dentry *ppagefs_pid_dir(struct task_struct *p, struct dentry *parent)
 	struct dentry *dir;
 	struct p_info *info;
 	struct inode *inode;
-	
+
 	pid = task_pid_vnr(p);
 	inode = ppagefs_pid_dir_inode(pid, p->comm, parent);
 	info = inode->i_private;
@@ -259,8 +259,9 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 	struct dentry *dentry, *pid_dir;
 	struct task_struct *p;
 	struct list_head *cursor, *pos, *n;
+	struct p_info *info;
 	LIST_HEAD(d_list);
-	
+
 	err = dcache_dir_open(inode, file);
 	if (err)
 		return err;
@@ -289,7 +290,7 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 	/* delete PID.PROCESSNAME directories where PID is not running */
 	spin_lock(&dentry->d_lock);
 	cursor = &dentry->d_subdirs;
-	while((cursor = cursor->next) != &dentry->d_subdirs) {
+	while ((cursor = cursor->next) != &dentry->d_subdirs) {
 		struct dentry *d = list_entry(cursor, struct dentry, d_child);
 		struct inode *i = d_inode(d);
 		struct p_info *info = i->i_private;
@@ -298,13 +299,13 @@ int ppage_dcache_dir_open(struct inode *inode, struct file *file)
 		 * add dentry to delete to d_list, and dput later
 		 * to avoid racing condition
 		 */
-		if(!info->retain)
+		if (!info->retain)
 			list_add_tail(&info->head, &d_list);
 	}
 	spin_unlock(&dentry->d_lock);
 
 	list_for_each_safe(pos, n, &d_list) {
-		struct p_info *info = list_entry(pos, struct p_info, head);
+		info = list_entry(pos, struct p_info, head);
 		dput(info->dentry);
 	}
 
@@ -382,7 +383,7 @@ static inline struct task_struct *process_exists(struct p_info *info)
 		return NULL;
 	if (strncmp(p->comm, comm, TASK_COMM_LEN) != 0)
 		return NULL;
-	
+
 	return p;
 }
 
@@ -397,21 +398,21 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 	struct expose_count_args args = {0, 0};
 	struct va_info lst;
 	loff_t fsize, fpos = iocb->ki_pos;
-	lst.root = &RB_ROOT;
 
-	if (!(p = process_exists(p_info))) {
+	lst.root = &RB_ROOT;
+	p = process_exists(p_info);
+
+	if (!p)
 		return 0;
-	}
 
 	get_task_struct(p);
 	mmap_walk(p->mm, &args, &lst);
 	put_task_struct(p);
 
-	if (is_zero_file(dentry)) {
+	if (is_zero_file(dentry))
 		snprintf(data, sizeof(data), "%ld\n", args.zero);
-	}else {
+	else
 		snprintf(data, sizeof(data), "%ld\n", args.total);
-	}
 
 	fsize = strlen(data) + 1;
 	size = strlen(data) + 1;
@@ -424,10 +425,10 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 		size -= fpos;
 	else
 		size = iter->count;
-	
+
 	ret = _copy_to_iter(data + fpos, size, iter);
 	iocb->ki_pos += ret;
-		
+
 	// configures this dentry to be deleted after read
 	if (dentry->d_lockref.count != 0)
 		dentry->d_lockref.count = 0;
@@ -556,7 +557,7 @@ dir_not_found:
 	return NULL;
 }
 
-/* ppagefs initilization functions */
+/* ppagefs initialization functions */
 static int ppagefs_fill_super(struct super_block *sb, struct fs_context *fc)
 {
 	int err = 0;

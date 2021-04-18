@@ -15,8 +15,7 @@ struct va_info {
 	unsigned long new_pfn;
 };
 
-struct expose_count_args 
-{
+struct expose_count_args {
 	unsigned long total;
 	unsigned long zero;
 };
