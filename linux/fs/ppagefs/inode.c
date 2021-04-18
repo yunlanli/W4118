@@ -375,6 +375,9 @@ static inline struct task_struct *process_exists(struct p_info *info)
 	pid_t pid = info->pid;
 	const char *comm = info->comm;
 
+	if (pid == -1)
+		return NULL;
+
 	rcu_read_lock();
 	p = find_task_by_vpid(pid);
 	rcu_read_unlock();
@@ -408,6 +411,7 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 	get_task_struct(p);
 	mmap_walk(p->mm, &args, &lst);
 	put_task_struct(p);
+	free_pfn_rb_tree(lst.root);
 
 	if (is_zero_file(dentry))
 		snprintf(data, sizeof(data), "%ld\n", args.zero);
@@ -456,8 +460,12 @@ static void parse_pid_dir_name(const char *dir_name, struct p_info *info)
 	if (match != 2)
 		goto fill_err;
 
-	info->pid = pid;
 	task = find_task_by_vpid(pid);
+	if (!task) {
+		info->pid = -1;
+		return;
+	}
+	info->pid = pid;
 	strncpy(info->comm, task->comm, TASK_COMM_LEN);
 
 	return;

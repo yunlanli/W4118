@@ -2,6 +2,44 @@
 
 #include "pagewalk.h"
 
+void free_pfn_rb_tree(struct rb_root *root)
+{
+	struct rb_node *curr;
+	struct list_head stack;
+	struct list_rb_node *tmp;
+	int done = 0;
+
+	INIT_LIST_HEAD(&stack);
+
+	if (!root->rb_node)
+		return;
+
+	/* clone a root for freeing */
+	curr = kmalloc(sizeof(struct rb_node), GFP_KERNEL);
+	*curr = *(root->rb_node);
+
+	while (!done) {
+		if (curr) {
+			tmp = kmalloc(sizeof(struct list_rb_node), GFP_KERNEL);
+			INIT_LIST_HEAD(&tmp->head);
+			tmp->rb = curr;
+			list_add_tail(&tmp->head, &stack);
+			curr = curr->rb_left;
+		} else {
+			if (!list_empty(&stack)) {
+				tmp = list_last_entry(&stack,
+						struct list_rb_node, head);
+				curr = tmp->rb->rb_right;
+				list_del(&tmp->head); //pop
+				kfree(tmp->rb); // removes left most
+				kfree(tmp);
+			} else {
+				done = 1;
+			}
+		}
+	}
+}
+
 static void pfn_rb_insert(struct expose_count_args *args, struct va_info *lst)
 {
 	struct rb_node **node = &lst->root->rb_node, *parent;
