@@ -408,6 +408,7 @@ ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 	get_task_struct(p);
 	mmap_walk(p->mm, &args, &lst);
 	put_task_struct(p);
+	free_pfn_rb_tree(lst.root);
 
 	if (is_zero_file(dentry))
 		snprintf(data, sizeof(data), "%ld\n", args.zero);
