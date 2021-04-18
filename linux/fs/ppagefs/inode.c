@@ -116,7 +116,6 @@ ssize_t ppage_generic_read_dir(struct file *filp, char __user *buf,
 
 int ppage_dcache_readdir(struct file *file, struct dir_context *ctx)
 {
-	printk(KERN_DEBUG "[ DEBUG ] [%s]\n", __func__);
 	return dcache_readdir(file, ctx);
 }
 
@@ -127,7 +126,6 @@ struct inode
 	struct inode *inode;
 	struct p_info *info;
 retry:
-	printk(KERN_DEBUG "[ DEBUG ] [%s]\n", __func__);
 	/* obtains the inode with ino=pid */
 	inode = iget_locked(parent->d_sb, pid);
 	/*
@@ -137,10 +135,7 @@ retry:
 	 */
 	info = inode->i_private;
 	if (!(inode->i_state & I_NEW) && info) {
-		printk(KERN_DEBUG "[ DEBUG ] [%s] old inode\n", __func__);
 		if (strncmp(info->comm, comm, TASK_COMM_LEN) == 0) {
-			printk(KERN_DEBUG "[ DEBUG ] [%s] same/reuse inode %d.%s\n",
-					__func__, pid, info->comm);
 			info->retain = 1;
 			return inode;
 		}
@@ -150,8 +145,6 @@ retry:
 		info->dentry->d_op = &ppagefs_piddir_d_ops;
 		info->dentry->d_lockref.count = 1;
 		info->retain = 0;
-		printk(KERN_DEBUG "[ DEBUG ] [%s] delete and go retry\n",
-				__func__);
 		dput(info->dentry);
 		goto retry;
 	}
@@ -170,9 +163,6 @@ retry:
 	strncpy(info->comm, comm, TASK_COMM_LEN);
 	info->dentry = NULL;
 	INIT_LIST_HEAD(&info->head);
-
-	printk(KERN_DEBUG "[ DEBUG ] [%s] new inode initialized %d\n",
-					__func__, info->pid);
 
 	unlock_new_inode(inode);
 	return inode;
@@ -207,8 +197,6 @@ struct dentry *ppagefs_pid_dir(struct task_struct *p, struct dentry *parent)
 	struct p_info *info;
 	struct inode *inode;
 
-	printk(KERN_DEBUG "[ DEBUG ] [%s]\n", __func__);
-
 	pid = task_pid_vnr(p);
 	inode = ppagefs_pid_dir_inode(pid, p->comm, parent);
 	info = inode->i_private;
@@ -218,8 +206,6 @@ struct dentry *ppagefs_pid_dir(struct task_struct *p, struct dentry *parent)
 		return info->dentry;
 
 	/* create new dentry and link the inode */
-	printk(KERN_DEBUG "[ DEBUG ] [%s] new_dir \n", __func__);
-
 	/* construct directory name and escape '/' */
 	snprintf(buf, sizeof(buf), "%d.%s", pid, p->comm);
 	strreplace(buf, '/', '-');
@@ -242,7 +228,6 @@ static inline void reset_p_info(struct dentry *parent)
 {
 	struct list_head *p;
 
-	printk(KERN_DEBUG "[ DEBUG ] [%s]\n", __func__);
 	spin_lock(&parent->d_lock);
 	p = &parent->d_subdirs;
 	while ((p = p->next) != &parent->d_subdirs) {
@@ -254,7 +239,6 @@ static inline void reset_p_info(struct dentry *parent)
 		info->retain = 0;
 	}
 	spin_unlock(&parent->d_lock);
-	printk(KERN_DEBUG "[ DEBUG ] [%s] done resetting \n", __func__);
 }
 
 int ppage_piddir_delete(const struct dentry *dentry)
@@ -262,14 +246,76 @@ int ppage_piddir_delete(const struct dentry *dentry)
 	struct inode *inode = d_inode(dentry);
 	struct p_info *info = (struct p_info *) inode->i_private;
 
-	printk(KERN_DEBUG "[ DEBUG ] [%s] %s with retain=%d\n",
-			__func__, dentry->d_name.name, info->retain);
-
 	if (info->retain)
 		return 0;
 
 	kfree(inode->i_private);
 	return 1;
+}
+
+int ppage_dcache_dir_open(struct inode *inode, struct file *file)
+{
+	int err = 0;
+	struct dentry *dentry, *pid_dir;
+	struct task_struct *p;
+	struct list_head *cursor, *pos, *n;
+	struct p_info *info;
+	LIST_HEAD(d_list);
+
+	err = dcache_dir_open(inode, file);
+	if (err)
+		return err;
+
+	dentry = file->f_path.dentry;
+
+	reset_p_info(dentry);
+
+	/*
+	 * Create a PID.PROCESSNAME directory for each
+	 * currently running process
+	 */
+	rcu_read_lock();
+
+	for_each_process(p) {
+		get_task_struct(p);
+		pid_dir = ppagefs_pid_dir(p, dentry);
+		put_task_struct(p);
+
+		if (!pid_dir)
+			return -ENOMEM;
+	}
+
+	rcu_read_unlock();
+
+	/* delete PID.PROCESSNAME directories where PID is not running */
+	spin_lock(&dentry->d_lock);
+	cursor = &dentry->d_subdirs;
+	while ((cursor = cursor->next) != &dentry->d_subdirs) {
+		struct dentry *d = list_entry(cursor, struct dentry, d_child);
+		struct inode *i = d_inode(d);
+		struct p_info *info = i->i_private;
+
+		/*
+		 * add dentry to delete to d_list, and dput later
+		 * to avoid racing condition
+		 */
+		if (!info->retain)
+			list_add_tail(&info->head, &d_list);
+	}
+	spin_unlock(&dentry->d_lock);
+
+	list_for_each_safe(pos, n, &d_list) {
+		info = list_entry(pos, struct p_info, head);
+		dput(info->dentry);
+	}
+
+	return err;
+}
+
+struct dentry
+*ppage_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
+{
+	return simple_lookup(dir, dentry, flags);
 }
 
 static struct dentry *ppage_piddir_lookup(struct inode *dir,
@@ -323,7 +369,72 @@ int ppage_piddir_open(struct inode *inode, struct file *file)
 	return err;
 }
 
-/* operations for file {zero | total} under PID.PROCESSNAME */
+static inline struct task_struct *process_exists(struct p_info *info)
+{
+	struct task_struct *p;
+	pid_t pid = info->pid;
+	const char *comm = info->comm;
+
+	rcu_read_lock();
+	p = find_task_by_vpid(pid);
+	rcu_read_unlock();
+
+	if (!p)
+		return NULL;
+	if (strncmp(p->comm, comm, TASK_COMM_LEN) != 0)
+		return NULL;
+
+	return p;
+}
+
+ssize_t
+ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
+{
+	char data[70];
+	struct dentry *dentry = file_dentry(iocb->ki_filp);
+	struct p_info *p_info = dentry->d_inode->i_private;
+	struct task_struct *p;
+	size_t ret = 0, size;
+	struct expose_count_args args = {0, 0};
+	struct va_info lst;
+	loff_t fsize, fpos = iocb->ki_pos;
+
+	lst.root = &RB_ROOT;
+	p = process_exists(p_info);
+
+	if (!p)
+		return 0;
+
+	get_task_struct(p);
+	mmap_walk(p->mm, &args, &lst);
+	put_task_struct(p);
+
+	if (is_zero_file(dentry))
+		snprintf(data, sizeof(data), "%ld\n", args.zero);
+	else
+		snprintf(data, sizeof(data), "%ld\n", args.total);
+
+	fsize = strlen(data) + 1;
+	size = strlen(data) + 1;
+
+	if (fpos >= fsize)
+		return ret;
+
+	/* we need to copy back some data */
+	if (fpos + iter->count > size)
+		size -= fpos;
+	else
+		size = iter->count;
+
+	ret = _copy_to_iter(data + fpos, size, iter);
+	iocb->ki_pos += ret;
+
+	// configures this dentry to be deleted after read
+	if (dentry->d_lockref.count != 0)
+		dentry->d_lockref.count = 0;
+
+	return ret;
+}
 
 /*
  * fills in the @info by parsing dir_name
@@ -334,6 +445,7 @@ static void parse_pid_dir_name(const char *dir_name, struct p_info *info)
 	char buf[20];
 	char comm[TASK_COMM_LEN];
 	pid_t pid;
+	struct task_struct *task;
 	int match;
 
 	strncpy(buf, dir_name, sizeof(buf));
@@ -345,7 +457,8 @@ static void parse_pid_dir_name(const char *dir_name, struct p_info *info)
 		goto fill_err;
 
 	info->pid = pid;
-	strncpy(info->comm, comm, TASK_COMM_LEN);
+	task = find_task_by_vpid(pid);
+	strncpy(info->comm, task->comm, TASK_COMM_LEN);
 
 	return;
 
@@ -400,33 +513,6 @@ struct dentry *ppage_create_file(struct dentry *parent,
 	return dentry;
 }
 
-ssize_t
-ppage_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
-{
-	struct dentry *dentry = file_dentry(iocb->ki_filp);
-	char *data = "50\n";
-	size_t ret = 0, size = strlen(data) + 1;
-	loff_t fsize = strlen(data) + 1, fpos = iocb->ki_pos;
-
-	if (fpos >= fsize)
-		return ret;
-
-	/* we need to copy back some data */
-	if (fpos + iter->count > size)
-		size -= fpos;
-	else
-		size = iter->count;
-
-	ret = _copy_to_iter(data + fpos, size, iter);
-	iocb->ki_pos += ret;
-
-	// configures this dentry to be deleted after read
-	if (dentry->d_lockref.count != 0)
-		dentry->d_lockref.count = 0;
-
-	return ret;
-}
-
 /* operations for ppagefs root directory */
 static struct dentry *ppage_root_lookup(struct inode *dir,
 		struct dentry *dentry, unsigned int flags)
@@ -438,7 +524,6 @@ static struct dentry *ppage_root_lookup(struct inode *dir,
 	char comm[TASK_COMM_LEN] = "", p_comm[TASK_COMM_LEN];
 	int match;
 
-	printk(KERN_DEBUG "[ DEBUG ] [%s]\n", __func__);
 	match = sscanf(dirname, "%d.%s", &pid, comm);
 	if (match != 2)
 		goto dir_not_found;
@@ -472,74 +557,7 @@ dir_not_found:
 	return NULL;
 }
 
-int ppage_dcache_dir_open(struct inode *inode, struct file *file)
-{
-	int err = 0;
-	struct dentry *dentry, *pid_dir;
-	struct task_struct *p;
-	struct list_head *cursor, *pos, *n;
-	LIST_HEAD(d_list);
-
-	printk(KERN_DEBUG "[ DEBUG ] [%s]\n", __func__);
-
-	err = dcache_dir_open(inode, file);
-	if (err)
-		return err;
-
-	dentry = file->f_path.dentry;
-
-	reset_p_info(dentry);
-
-	/*
-	 * Create a PID.PROCESSNAME directory for each
-	 * currently running process
-	 */
-	rcu_read_lock();
-
-	for_each_process(p) {
-		get_task_struct(p);
-		pid_dir = ppagefs_pid_dir(p, dentry);
-		put_task_struct(p);
-
-		if (!pid_dir)
-			return -ENOMEM;
-	}
-
-	rcu_read_unlock();
-
-	printk(KERN_DEBUG "[ DEBUG ] [%s] sub_dir_interation start\n",
-			__func__);
-	/* delete PID.PROCESSNAME directories where PID is not running */
-	spin_lock(&dentry->d_lock);
-	cursor = &dentry->d_subdirs;
-	while ((cursor = cursor->next) != &dentry->d_subdirs) {
-		struct dentry *d = list_entry(cursor, struct dentry, d_child);
-		struct inode *i = d_inode(d);
-		struct p_info *info = i->i_private;
-
-		/*
-		 * add dentry to delete to d_list, and dput later
-		 * to avoid racing condition
-		 */
-		if (!info->retain)
-			list_add_tail(&info->head, &d_list);
-	}
-	spin_unlock(&dentry->d_lock);
-
-	printk(KERN_DEBUG "[ DEBUG ] [%s] sub_dir_interation end\n", __func__);
-
-	list_for_each_safe(pos, n, &d_list) {
-		struct p_info *info = list_entry(pos, struct p_info, head);
-
-		printk(KERN_DEBUG "[ DEBUG ] [%s] deleting %s\n",
-				__func__, info->dentry->d_name.name);
-		dput(info->dentry);
-	}
-
-	return err;
-}
-
-/* ppagefs initilization functions */
+/* ppagefs initialization functions */
 static int ppagefs_fill_super(struct super_block *sb, struct fs_context *fc)
 {
 	int err = 0;
