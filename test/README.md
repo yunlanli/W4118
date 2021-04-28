@@ -6,7 +6,7 @@ To run the program, we need to
 1. press ENTER upon prompts to see changes
 
 ## RESULT:
-
+```
 [ INFO ] ./inspect_pages 2064
 [ RESULT ] pid: 2064, pid->comm: map_pages, zero: 0, total: 385
 Press enter to map 5 zero pages...
@@ -26,7 +26,7 @@ Press enter to unmap 5 zero pages...
 [ INFO ] ./inspect_pages 2064
 [ RESULT ] pid: 2064, pid->comm: map_pages, zero: 0, total: 386
 Press enter to exit...
-
+```
 ## EXPECTATION AND ANALYSIS:
 1. [385 -> 391] In step one, we attempted to map 5 zero pages using mmap
    with MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED to create zero filled pages.
