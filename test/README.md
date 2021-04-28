@@ -1,3 +1,4 @@
+```bash
 w4118@ubuntu:~/hmw4/test$ sudo ./syscall_test
 [ info ] Setting process 2285 to use wrr_sched_class...
 [ success ] pid 2285 set to use policy 7
@@ -57,3 +58,4 @@ Enter weight: 1
 [ info ] cpu_5  nr_running: 0           total_weight 0
 [ info ] cpu_6  nr_running: 0           total_weight 0
 [ info ] cpu_7  nr_running: 0           total_weight 0
+```
