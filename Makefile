@@ -9,18 +9,19 @@ LDFLAGS =
 LDLIBS = 
 
 .PHONY: all
-all: clean lifecycle tracker tmp
+all: clean lifecycle tracker
 
-tracker: tracker.c
+lifecycle:
 
-lifecycle: lifecycle.c
+tracker:
 
 tmp: tmp/Makefile tmp/test tmp/test2 tmp/test3 tmp/generator
 	cd tmp && make
 
 .PHONY: clean
 clean:
-		rm -f *.o *~ lifecycle tracker tmp/test tmp/test2 tmp/test3 tmp/generator
+	rm -f *.o *~ tmp/syscall_test tmp/test tmp/test2 \
+	    tmp/test3 tmp/generator lifecycle tracker
 
 
 
