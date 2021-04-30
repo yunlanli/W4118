@@ -11,13 +11,14 @@ specific feature. As an example, the branch *PPAGEFS* contains our
 implementation for a in-memory filesystem where in its root directory,
 there's a PID.PROCESSNAME directory for each currently running process and
 within this directory, there are 2 files *zero* and *total* that contains
-the number of distinct zero and total ppages respectively mapped by the given
+the number of distinct zero and total pages respectively mapped by the given
 process.
 
 ## Branch -> Homework No. Mapping
 
   Branch              |     Homework No.
   ---                 |     ---
+  PTREE               |     2
   PSTRACE             |     3
   WRR\_SCHEDULER      |     4
   EXPOSE\_PAGE\_TABLE |     5
